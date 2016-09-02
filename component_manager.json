@@ -1,0 +1,5 @@
+{
+  "fuchsia:program": {
+    "url": "mojo:component_manager"
+  }
+}
