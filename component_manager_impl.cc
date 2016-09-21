@@ -9,6 +9,7 @@
 #include "apps/component_manager/fake_network.h"
 #include "lib/ftl/functional/make_copyable.h"
 #include "lib/ftl/logging.h"
+#include "lib/mtl/data_pipe/strings.h"
 #include "third_party/rapidjson/rapidjson/document.h"
 #include "third_party/rapidjson/rapidjson/stringbuffer.h"
 #include "third_party/rapidjson/rapidjson/writer.h"
@@ -21,12 +22,14 @@ constexpr char kProgramUrlProperty[] = "url";
 namespace {
 
 bool JsonToFacetData(const rapidjson::Value& value, mojo::FacetDataPtr* facet_data) {
-  FTL_DCHECK(facet_data != NULL);
+  FTL_DCHECK(facet_data != nullptr);
 
   if (value.IsString()) {
     (*facet_data)->set_string(value.GetString());
     return true;
-  } else if (value.IsArray()) {
+  }
+
+  if (value.IsArray()) {
     auto array = mojo::Array<mojo::FacetDataPtr>::New(value.Size());
     for (size_t i = 0; i < value.Size(); i++) {
       if (!JsonToFacetData(value[i], &array[i])) {
@@ -35,7 +38,9 @@ bool JsonToFacetData(const rapidjson::Value& value, mojo::FacetDataPtr* facet_da
     }
     (*facet_data)->set_array(array.Pass());
     return true;
-  } else if (value.IsObject()) {
+  }
+
+  if (value.IsObject()) {
     mojo::Map<mojo::String, mojo::FacetDataPtr> map;
     for (auto i = value.MemberBegin(); i != value.MemberEnd(); ++i) {
       auto member = mojo::FacetData::New();
@@ -73,6 +78,13 @@ std::string ProgramUrlFromManifest(const mojo::ComponentManifestPtr* component_m
   return url->get_string();
 }
 
+mojo::NetworkErrorPtr MakeNetworkError(int code, const std::string& description) {
+  auto error = mojo::NetworkError::New();
+  error->code = code;
+  error->description = description;
+  return error;
+}
+
 }  // namespace
 
 void ComponentManagerImpl::Initialize(mojo::ApplicationConnectorPtr application_connector) {
@@ -83,39 +95,57 @@ void ComponentManagerImpl::GetComponentManifest(const mojo::String& component_id
                                                 const GetComponentManifestCallback& callback) {
   FTL_LOG(INFO) << "ComponentManagerImpl::GetComponentManifest(\"" << component_id << "\")";
 
-  std::string contents;
-  if (!fake_network::Get(component_id, &contents)) {
-    FTL_LOG(ERROR) << "Failed to load component manifest: " << component_id;
-    callback.Run(NULL);
-    return;
-  }
+  mojo::URLRequestPtr request = mojo::URLRequest::New();
+  request->url = component_id;
 
-  rapidjson::Document doc;
-  if (doc.Parse(contents.c_str()).HasParseError()) {
-    FTL_LOG(ERROR) << "Failed to parse component manifest at: " << component_id;
-    callback.Run(NULL);
-    return;
-  }
+  auto url_loader = fake_network_.MakeURLLoader();
 
-  if (!doc.IsObject()) {
-    FTL_LOG(ERROR) << "Component manifest " << component_id << " is not a JSON object";
-    callback.Run(NULL);
-    return;
-  }
+  url_loader->Start(
+      std::move(request), [component_id, callback, url_loader](mojo::URLResponsePtr response) {
+        FTL_LOG(INFO) << "URL Loader Start Callback";
+        if (response->error) {
+          FTL_LOG(ERROR) << "URL response contained error: " << response->error->description;
+          callback.Run(nullptr, std::move(response->error));
+          return;
+        }
 
-  auto manifest = mojo::ComponentManifest::New();
-  manifest->id = component_id;
+        // TODO(ianloic): pass incrementally to the JSON parser.
+        // TODO(ianloic): impose some limits on manifest size to prevent DoS.
 
-  for (auto i = doc.MemberBegin(); i != doc.MemberEnd(); ++i) {
-    auto facet_data = mojo::FacetData::New();
-    if (JsonToFacetData(i->value, &facet_data)) {
-      manifest->facets.insert(i->name.GetString(), std::move(facet_data));
-    } else {
-      FTL_LOG(ERROR) << "Failed to parse facet " << i->name.GetString();
-    }
-  }
+        std::string contents;
+        if (!mtl::BlockingCopyToString(std::move(response->body), &contents)) {
+          FTL_LOG(ERROR) << "Failed to read URL response.";
+          callback.Run(nullptr, MakeNetworkError(0, "Failed to read URL response."));
+          return;
+        }
 
-  callback.Run(std::move(manifest));
+        rapidjson::Document doc;
+        if (doc.Parse(contents.c_str()).HasParseError()) {
+          FTL_LOG(ERROR) << "Failed to parse component manifest at: " << component_id;
+          callback.Run(nullptr, MakeNetworkError(0, "Failed to parse component manifest."));
+          return;
+        }
+
+        if (!doc.IsObject()) {
+          FTL_LOG(ERROR) << "Component manifest " << component_id << " is not a JSON object";
+          callback.Run(nullptr, MakeNetworkError(0, "Component manifest is not a JSON object"));
+          return;
+        }
+
+        auto manifest = mojo::ComponentManifest::New();
+        manifest->id = component_id;
+
+        for (auto i = doc.MemberBegin(); i != doc.MemberEnd(); ++i) {
+          auto facet_data = mojo::FacetData::New();
+          if (JsonToFacetData(i->value, &facet_data)) {
+            manifest->facets.insert(i->name.GetString(), std::move(facet_data));
+          } else {
+            FTL_LOG(ERROR) << "Failed to parse facet " << i->name.GetString();
+          }
+        }
+
+        callback.Run(std::move(manifest), nullptr);
+      });
 }
 
 void ComponentManagerImpl::ConnectToComponent(
@@ -127,19 +157,21 @@ void ComponentManagerImpl::ConnectToComponent(
     return;
   }
 
-  mojo::ApplicationConnectorPtr application_connector;
-  application_connector_->Duplicate(GetProxy(&application_connector));
+  std::function<void(mojo::ComponentManifestPtr, mojo::NetworkErrorPtr)> callback =
+      ftl::MakeCopyable([ service_provider = std::move(service_provider), this ](
+          mojo::ComponentManifestPtr component_manifest,
+          mojo::NetworkErrorPtr network_error) mutable {
+        if (network_error) {
+          FTL_LOG(ERROR) << "network error: " << network_error->description;
+          return;
+        }
+        FTL_DCHECK(component_manifest);
+        FTL_LOG(INFO) << "callback with " << component_manifest->id;
 
-  std::function<void(mojo::ComponentManifestPtr)> callback = ftl::MakeCopyable([
-    application_connector = std::move(application_connector),
-    service_provider = std::move(service_provider)
-  ](mojo::ComponentManifestPtr component_manifest) mutable {
-    FTL_LOG(INFO) << "callback with " << component_manifest->id;
-
-    auto url = ProgramUrlFromManifest(&component_manifest);
-    FTL_LOG(INFO) << " url=" << url;
-    application_connector->ConnectToApplication(url, std::move(service_provider));
-  });
+        auto url = ProgramUrlFromManifest(&component_manifest);
+        FTL_LOG(INFO) << " url=" << url;
+        application_connector_->ConnectToApplication(url, std::move(service_provider));
+      });
 
   GetComponentManifest(component_id, callback);
 }

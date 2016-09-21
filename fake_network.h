@@ -8,32 +8,26 @@
 #ifndef APPS_COMPONENT_MANAGER_FAKE_NETWORK_H_
 #define APPS_COMPONENT_MANAGER_FAKE_NETWORK_H_
 
-#include <iostream>
-#include <regex>
 #include <string>
+#include <thread>
 
-#include "lib/ftl/files/file.h"
-#include "lib/ftl/files/path.h"
+#include "apps/network/interfaces/url_loader.mojom.h"
 #include "lib/ftl/logging.h"
+#include "lib/ftl/memory/ref_ptr.h"
+#include "lib/ftl/tasks/task_runner.h"
 
 namespace component_manager {
-namespace fake_network {
 
-bool Get(const std::string& url, std::string* content) {
-  FTL_DCHECK(content != NULL);
+class FakeNetwork {
+ public:
+  FakeNetwork();
+  std::shared_ptr<mojo::URLLoader> MakeURLLoader();
 
-  const std::string base_path = "/boot/components/";
-  std::regex re("[:/]+");
-  std::string path = files::SimplifyPath(base_path + std::regex_replace(url, re, "/"));
-  // TODO(ianloic): check that path is inside base_path.
-  if (!files::ReadFileToString(path, content)) {
-    FTL_LOG(ERROR) << "Warning: Couldn't read " << path << " for " << url;
-    return false;
-  }
-  return true;
-}
+ private:
+  std::thread thread_;
+  ftl::RefPtr<ftl::TaskRunner> task_runner_;
+};
 
-}  // namespace fake_network
 }  // namespace component_manager
 
 #endif  // APPS_COMPONENT_MANAGER_FAKE_NETWORK_H_

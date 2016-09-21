@@ -6,6 +6,7 @@
 module mojo;
 
 import "mojo/public/interfaces/application/service_provider.mojom";
+import "mojo/public/interfaces/network/network_error.mojom";
 
 // This represents a node in the JSON structure associated with a facet in a component manifest.
 union FacetData {
@@ -24,6 +25,6 @@ struct ComponentManifest {
 [ServiceName="mojo::component::ComponentManager"]
 interface ComponentManager {
   GetComponentManifest(string component_id)
-      => (ComponentManifest component_manifest);
+      => (ComponentManifest? component_manifest, NetworkError? error);
   ConnectToComponent(string component_id, ServiceProvider& service_provider);
 };

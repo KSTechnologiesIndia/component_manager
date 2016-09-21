@@ -8,4 +8,7 @@ mojom("interfaces") {
   sources = [
     "component.mojom",
   ]
+  public_deps = [
+    "//mojo/public/interfaces/network",
+  ]
 }

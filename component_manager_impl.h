@@ -5,7 +5,9 @@
 #ifndef APPS_COMPONENT_MANAGER_IMPL_H_
 #define APPS_COMPONENT_MANAGER_IMPL_H_
 
+#include "apps/component_manager/fake_network.h"
 #include "apps/component_manager/interfaces/component.mojom.h"
+#include "apps/network/interfaces/url_loader.mojom.h"
 #include "mojo/public/cpp/bindings/interface_ptr.h"
 #include "mojo/public/interfaces/application/application_connector.mojom.h"
 
@@ -23,6 +25,7 @@ class ComponentManagerImpl : public mojo::ComponentManager {
 
  private:
   mojo::ApplicationConnectorPtr application_connector_;
+  FakeNetwork fake_network_;
 
   MOJO_DISALLOW_COPY_AND_ASSIGN(ComponentManagerImpl);
 };
