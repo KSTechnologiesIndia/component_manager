@@ -1,0 +1,40 @@
+# Copyright 2016 The Fuchsia Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+# This defines a fuchsia_component template that builds an executable or dart_app.
+# It should be used with a corresponding "component" entry in packages/gn/*
+# If a "main_dart" is specified then a dart_app is assumed.
+# It takes:
+#   manifest (required): the name of the JSON manifest that defines the component
+#   program (optional): the name of the executable to produce
+# all other parameters are passed to the underlying dart_app or executable rule.
+template("fuchsia_component") {
+  # TODO(ianloic) remove Chromium's concept of components from our build system
+  # and rename this to "component"
+
+  assert(defined(invoker.manifest), "manifest must be defined for $target_name")
+
+  # TODO(ianloic): read the manifest JSON to find the program name
+  if (defined(invoker.program)) {
+    program = invoker.program
+  } else {
+    program = "${target_name}.mojo"
+  }
+
+  if (defined(invoker.main_dart)) {
+    component_mode = "dart_app"
+  } else {
+    component_mode = "executable"
+  }
+
+  target(component_mode, program) {
+    forward_variables_from(invoker, "*", ["program", "manifest"])
+  }
+
+  group(target_name) {
+    deps = [
+      ":$program",
+    ]
+  }
+}

@@ -2,7 +2,11 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-executable("component_manager") {
+import("//apps/component_manager/component.gni")
+
+fuchsia_component("component_manager") {
+  manifest = "component_manager.json"
+
   sources = [
     "component_manager_impl.cc",
     "component_manager_impl.h",
@@ -12,7 +16,6 @@ executable("component_manager") {
   ]
 
   deps = [
-    ":json",
     "//apps/component_manager/interfaces",
     "//apps/network",
     "//apps/network/interfaces",
@@ -29,13 +32,4 @@ executable("component_manager") {
   ]
 
   libs = [ "mxio" ]
-}
-
-copy("json") {
-  sources = [
-    "component_manager.json",
-  ]
-  outputs = [
-    "$root_out_dir/{{source_file_part}}",
-  ]
 }

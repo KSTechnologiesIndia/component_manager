@@ -2,9 +2,12 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-executable("hello_component") {
+import("//apps/component_manager/component.gni")
+
+fuchsia_component("hello_component") {
+  manifest = "hello_component.json"
+
   deps = [
-    ":manifest",
     "//apps/component_manager/interfaces",
     "//lib/ftl",
     "//mojo/public/c:system",
@@ -17,14 +20,5 @@ executable("hello_component") {
 
   sources = [
     "hello_component.cc",
-  ]
-}
-
-copy("manifest") {
-  sources = [
-    "hello_component.json",
-  ]
-  outputs = [
-    "$root_out_dir/{{source_file_part}}",
   ]
 }
