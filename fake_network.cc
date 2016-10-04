@@ -33,8 +33,10 @@ std::string PathForUrl(const std::string& url) {
 
 class FakeURLLoader : public mojo::URLLoader {
  public:
-  FakeURLLoader(ftl::RefPtr<ftl::TaskRunner> task_runner) : task_runner_(task_runner) {}
-  void Start(mojo::URLRequestPtr request, const StartCallback& callback) override {
+  FakeURLLoader(ftl::RefPtr<ftl::TaskRunner> task_runner)
+      : task_runner_(task_runner) {}
+  void Start(mojo::URLRequestPtr request,
+             const StartCallback& callback) override {
     mojo::URLResponsePtr response = mojo::URLResponse::New();
     response->url = request->url;
     auto path = PathForUrl(request->url);
@@ -56,19 +58,25 @@ class FakeURLLoader : public mojo::URLLoader {
       mojo::CreateDataPipe(&options, &producer, &response->body);
 
       ftl::UniqueFD ufd(fd);
-      mtl::CopyFromFileDescriptor(std::move(ufd), std::move(producer), task_runner_.get(),
-                                  [task_runner = task_runner_](bool success){});
+      mtl::CopyFromFileDescriptor(std::move(ufd), std::move(producer),
+                                  task_runner_, [](bool success) {});
     }
     callback.Run(std::move(response));
   }
-  void FollowRedirect(const FollowRedirectCallback& callback) override { FTL_NOTIMPLEMENTED(); }
-  void QueryStatus(const QueryStatusCallback& callback) override { FTL_NOTIMPLEMENTED(); }
+  void FollowRedirect(const FollowRedirectCallback& callback) override {
+    FTL_NOTIMPLEMENTED();
+  }
+  void QueryStatus(const QueryStatusCallback& callback) override {
+    FTL_NOTIMPLEMENTED();
+  }
 
  private:
   ftl::RefPtr<ftl::TaskRunner> task_runner_;
 };
 
-FakeNetwork::FakeNetwork() { thread_ = mtl::CreateThread(&task_runner_); }
+FakeNetwork::FakeNetwork() {
+  thread_ = mtl::CreateThread(&task_runner_);
+}
 
 std::shared_ptr<mojo::URLLoader> FakeNetwork::MakeURLLoader() {
   return std::shared_ptr<mojo::URLLoader>(new FakeURLLoader(task_runner_));
