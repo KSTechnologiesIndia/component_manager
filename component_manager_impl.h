@@ -8,6 +8,7 @@
 #include "apps/component_manager/fake_network.h"
 #include "apps/component_manager/interfaces/component.mojom.h"
 #include "apps/network/interfaces/url_loader.mojom.h"
+#include "lib/ftl/macros.h"
 #include "mojo/public/cpp/bindings/interface_ptr.h"
 #include "mojo/public/interfaces/application/application_connector.mojom.h"
 
@@ -27,7 +28,7 @@ class ComponentManagerImpl : public mojo::ComponentManager {
   mojo::ApplicationConnectorPtr application_connector_;
   FakeNetwork fake_network_;
 
-  MOJO_DISALLOW_COPY_AND_ASSIGN(ComponentManagerImpl);
+  FTL_DISALLOW_COPY_AND_ASSIGN(ComponentManagerImpl);
 };
 
 }  // namespace component_manager

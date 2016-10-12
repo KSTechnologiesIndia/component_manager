@@ -7,13 +7,12 @@
 
 #include <string>
 
+#include "apps/component_manager/interfaces/component.mojom.h"
 #include "lib/ftl/logging.h"
+#include "lib/ftl/macros.h"
 #include "mojo/public/cpp/application/application_impl_base.h"
 #include "mojo/public/cpp/application/connect.h"
 #include "mojo/public/cpp/application/run_application.h"
-#include "mojo/public/cpp/system/macros.h"
-#include "mojo/public/cpp/utility/run_loop.h"
-#include "apps/component_manager/interfaces/component.mojom.h"
 
 using mojo::ComponentManagerPtr;
 
@@ -34,7 +33,7 @@ class RequestComponentApp : public mojo::ApplicationImplBase {
  private:
   ComponentManagerPtr component_manager_;
 
-  MOJO_DISALLOW_COPY_AND_ASSIGN(RequestComponentApp);
+  FTL_DISALLOW_COPY_AND_ASSIGN(RequestComponentApp);
 };
 
 }  // namespace

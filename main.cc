@@ -5,6 +5,7 @@
 #include <mojo/system/main.h>
 
 #include "lib/ftl/logging.h"
+#include "lib/ftl/macros.h"
 #include "apps/component_manager/component_manager_impl.h"
 #include "mojo/public/cpp/application/application_impl_base.h"
 #include "mojo/public/cpp/application/run_application.h"
@@ -40,7 +41,7 @@ class ComponentManagerApp : public mojo::ApplicationImplBase {
   ComponentManagerImpl impl_;
   mojo::BindingSet<mojo::ComponentManager> bindings_;
 
-  MOJO_DISALLOW_COPY_AND_ASSIGN(ComponentManagerApp);
+  FTL_DISALLOW_COPY_AND_ASSIGN(ComponentManagerApp);
 };
 
 }  // namespace component_manager
