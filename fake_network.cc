@@ -59,7 +59,8 @@ class FakeURLLoader : public mojo::URLLoader {
 
       ftl::UniqueFD ufd(fd);
       mtl::CopyFromFileDescriptor(std::move(ufd), std::move(producer),
-                                  task_runner_, [](bool success) {});
+                                  task_runner_,
+                                  [](bool success, ftl::UniqueFD fd) {});
     }
     callback.Run(std::move(response));
   }
