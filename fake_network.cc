@@ -15,7 +15,7 @@
 #include "lib/ftl/files/file.h"
 #include "lib/ftl/files/path.h"
 #include "lib/ftl/logging.h"
-#include "lib/mtl/data_pipe/files.h"
+#include "lib/mtl/shared_buffer/strings.h"
 #include "lib/mtl/threading/create_thread.h"
 
 namespace component_manager {
@@ -39,28 +39,32 @@ class FakeURLLoader : public mojo::URLLoader {
              const StartCallback& callback) override {
     mojo::URLResponsePtr response = mojo::URLResponse::New();
     response->url = request->url;
+
+    if ((request->response_body_mode !=
+         mojo::URLRequest::ResponseBodyMode::BUFFER) &&
+        (request->response_body_mode !=
+         mojo::URLRequest::ResponseBodyMode::BUFFER_OR_STREAM)) {
+      // Only know how to return buffered responses.
+      response->status_code = 500;
+      response->error = mojo::NetworkError::New();
+      response->error->description = "Only Buffered Responses Supported.";
+      callback.Run(std::move(response));
+      return;
+    }
+
+    std::string contents;
+    mojo::ScopedSharedBufferHandle shared_buffer;
     auto path = PathForUrl(request->url);
-    int fd = open(path.c_str(), O_RDONLY);
-    if (fd < 0) {
+    if (!files::ReadFileToString(path, &contents) ||
+        !mtl::SharedBufferFromString(contents, &shared_buffer)) {
       response->status_code = 404;
       response->error = mojo::NetworkError::New();
       response->error->code = errno;
       response->error->description = strerror(errno);
     } else {
       response->status_code = 200;
-
-      MojoCreateDataPipeOptions options;
-      options.struct_size = sizeof(MojoCreateDataPipeOptions);
-      options.flags = MOJO_CREATE_DATA_PIPE_OPTIONS_FLAG_NONE;
-      options.element_num_bytes = 1;
-      options.capacity_num_bytes = 1024;
-      mojo::ScopedDataPipeProducerHandle producer;
-      mojo::CreateDataPipe(&options, &producer, &response->body);
-
-      ftl::UniqueFD ufd(fd);
-      mtl::CopyFromFileDescriptor(std::move(ufd), std::move(producer),
-                                  task_runner_,
-                                  [](bool success, ftl::UniqueFD fd) {});
+      response->body = mojo::URLBody::New();
+      response->body->set_buffer(std::move(shared_buffer));
     }
     callback.Run(std::move(response));
   }

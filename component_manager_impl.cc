@@ -9,7 +9,7 @@
 #include "apps/component_manager/fake_network.h"
 #include "lib/ftl/functional/make_copyable.h"
 #include "lib/ftl/logging.h"
-#include "lib/mtl/data_pipe/strings.h"
+#include "lib/mtl/shared_buffer/strings.h"
 #include "third_party/rapidjson/rapidjson/document.h"
 #include "third_party/rapidjson/rapidjson/stringbuffer.h"
 #include "third_party/rapidjson/rapidjson/writer.h"
@@ -96,6 +96,7 @@ void ComponentManagerImpl::GetComponentManifest(const mojo::String& component_id
   FTL_LOG(INFO) << "ComponentManagerImpl::GetComponentManifest(\"" << component_id << "\")";
 
   mojo::URLRequestPtr request = mojo::URLRequest::New();
+  request->response_body_mode = mojo::URLRequest::ResponseBodyMode::BUFFER;
   request->url = component_id;
 
   auto url_loader = fake_network_.MakeURLLoader();
@@ -109,11 +110,12 @@ void ComponentManagerImpl::GetComponentManifest(const mojo::String& component_id
           return;
         }
 
-        // TODO(ianloic): pass incrementally to the JSON parser.
         // TODO(ianloic): impose some limits on manifest size to prevent DoS.
 
         std::string contents;
-        if (!mtl::BlockingCopyToString(std::move(response->body), &contents)) {
+        FTL_DCHECK(response->body->is_buffer());
+
+        if (!mtl::StringFromSharedBuffer(std::move(response->body->get_buffer()), &contents)) {
           FTL_LOG(ERROR) << "Failed to read URL response.";
           callback.Run(nullptr, MakeNetworkError(0, "Failed to read URL response."));
           return;
