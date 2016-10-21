@@ -1,8 +1,13 @@
 {
   "fuchsia:component": {
-    "name": "hello"
+    "name": "hello",
+    "url": "https://www.example.com/hello"
   },
   "fuchsia:program": {
-    "url": "fuchsia:hello_component.mojo"
+    "resource": "main"
+  },
+  "fuchsia:resources": {
+    "main": "hello_component.mojo",
+    "hello": "hello.txt"
   }
 }

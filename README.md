@@ -60,7 +60,7 @@ Build and Deploy
 
 Eventually components will be fetched off the network. We don't have a network
 yet. Currently components and their resources are stored under
-`/boot/fake_network` in a pattern representing their URL.
+`/boot/components` in a pattern representing their URL.
 
 Future Work
 ===========
