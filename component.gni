@@ -2,56 +2,39 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-# This defines a fuchsia_component template that builds a component from a
-# manifest and an executable rule. It will package up any resources that are
-# declared in the component manifest too.
+# This defines a fuchsia_component template that builds an executable or dart_app.
 # It should be used with a corresponding "component" entry in packages/gn/*
+# If a "main_dart" is specified then a dart_app is assumed.
 # It takes:
-#   manifest: the name of the JSON manifest that defines the component
-#   program: the target that produces the program executable
+#   manifest (required): the name of the JSON manifest that defines the component
+#   program (optional): the name of the executable to produce
+# all other parameters are passed to the underlying dart_app or executable rule.
 template("fuchsia_component") {
   # TODO(ianloic) remove Chromium's concept of components from our build system
   # and rename this to "component"
 
   assert(defined(invoker.manifest), "manifest must be defined for $target_name")
-  # TODO(ianloic): support non-program components
-  assert(defined(invoker.program), "program must be defined for $target_name")
 
-  program = invoker.program
-  # TODO(ianloic): handle output_name being set in program
-  program_name = get_label_info(program, "name")
-  program_out_path = "${root_out_dir}/${program_name}"
+  # TODO(ianloic): read the manifest JSON to find the program name
+  if (defined(invoker.program)) {
+    program = invoker.program
+  } else {
+    program = "${target_name}.mojo"
+  }
 
-  component_rules_script = "//apps/component_manager/component_rules.py"
-  manifest_scope = exec_script(rebase_path(component_rules_script),
-                               [
-                                 rebase_path(invoker.manifest),
-                               ],
-                               "scope",
-                               [
-                                 invoker.manifest,
-                                 component_rules_script,
-                               ])
-  copy_labels = []
+  if (defined(invoker.main_dart)) {
+    component_mode = "dart_app"
+  } else {
+    component_mode = "executable"
+  }
 
-  program_scope = manifest_scope.program
-  i = 1
-  foreach(file, manifest_scope.files) {
-    copy_label = "${target_name}__copy__$i"
-    i = i + 1
-    copy(copy_label) {
-      if (file.url == program_scope.url) {
-        sources = [program_out_path]
-        deps = [ program]
-      } else {
-        sources = [file.src_path]
-      }
-      outputs = ["${root_out_dir}/components/${file.url_as_path}"]
-    }
-    copy_labels += [ ":${copy_label}" ]
+  target(component_mode, program) {
+    forward_variables_from(invoker, "*", ["program", "manifest"])
   }
 
   group(target_name) {
-    deps = copy_labels
+    deps = [
+      ":$program",
+    ]
   }
 }
