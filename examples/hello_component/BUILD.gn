@@ -4,9 +4,7 @@
 
 import("//apps/component_manager/component.gni")
 
-fuchsia_component("hello_component") {
-  manifest = "hello_component.json"
-
+executable("hello_program") {
   deps = [
     "//apps/component_manager/interfaces",
     "//lib/ftl",
@@ -18,4 +16,9 @@ fuchsia_component("hello_component") {
   sources = [
     "hello_component.cc",
   ]
+}
+
+fuchsia_component("hello_component") {
+  manifest = "hello_component.json"
+  program = ":hello_program"
 }

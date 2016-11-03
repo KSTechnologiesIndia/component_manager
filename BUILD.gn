@@ -4,9 +4,7 @@
 
 import("//apps/component_manager/component.gni")
 
-fuchsia_component("component_manager") {
-  manifest = "component_manager.json"
-
+executable("component_manager_program") {
   sources = [
     "component_manager_impl.cc",
     "component_manager_impl.h",
@@ -30,4 +28,9 @@ fuchsia_component("component_manager") {
   ]
 
   libs = [ "mxio" ]
+}
+
+fuchsia_component("component_manager") {
+  manifest = "component_manager.json"
+  program = ":component_manager_program"
 }
