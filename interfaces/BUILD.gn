@@ -9,6 +9,7 @@ mojom("interfaces") {
     "component.mojom",
   ]
   public_deps = [
+    "//mojo/public/interfaces/application",
     "//mojo/public/interfaces/network",
   ]
 }
