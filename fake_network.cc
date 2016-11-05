@@ -22,7 +22,7 @@ namespace component_manager {
 
 namespace {
 
-constexpr char kBasePath[] = "/boot/fake_network/";
+constexpr char kBasePath[] = "/system/fake_network/";
 
 std::string PathForUrl(const std::string& url) {
   std::regex re("[:/]+");
