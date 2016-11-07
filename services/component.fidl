@@ -2,11 +2,10 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-[DartPackage="mojo_services"]
-module mojo;
+module component;
 
-import "mojo/public/interfaces/application/service_provider.mojom";
-import "mojo/public/interfaces/network/network_error.mojom";
+import "apps/modular/services/application/service_provider.fidl";
+import "apps/network/services/network_error.fidl";
 
 // This represents a node in the JSON structure associated with a facet in a component manifest.
 union FacetData {
@@ -22,9 +21,11 @@ struct ComponentManifest {
 };
 
 // Implemented by the component_manager.
-[ServiceName="mojo::component::ComponentManager"]
+[ServiceName="component::ComponentManager"]
 interface ComponentManager {
   GetComponentManifest(string component_id)
-      => (ComponentManifest? component_manifest, NetworkError? error);
-  ConnectToComponent(string component_id, ServiceProvider& service_provider);
+      => (ComponentManifest? component_manifest, network.NetworkError? error);
+  // TODO(thatguy): Find the right home for this, and develop some healthy
+  // patterns around launching apps defined in a component manifest.
+  // ConnectToComponent(string component_id, modular.ServiceProvider& service_provider);
 };

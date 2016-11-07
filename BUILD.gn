@@ -14,16 +14,11 @@ executable("component_manager_program") {
   ]
 
   deps = [
-    "//apps/component_manager/interfaces",
+    "//apps/component_manager/services",
+    "//apps/modular/lib/app",
     "//apps/network",
-    "//apps/network/interfaces",
     "//lib/ftl",
     "//lib/mtl",
-    "//mojo/public/cpp/application",
-    "//mojo/public/cpp/bindings",
-    "//mojo/public/interfaces/application",
-    "//mojo/public/interfaces/network",
-    "//mojo/system",
     "//third_party/rapidjson",
   ]
 

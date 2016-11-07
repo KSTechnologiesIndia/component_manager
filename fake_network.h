@@ -11,23 +11,23 @@
 #include <string>
 #include <thread>
 
-#include "apps/network/interfaces/url_loader.mojom.h"
+#include "apps/network/services/url_loader.fidl.h"
 #include "lib/ftl/logging.h"
 #include "lib/ftl/memory/ref_ptr.h"
 #include "lib/ftl/tasks/task_runner.h"
 
-namespace component_manager {
+namespace component {
 
 class FakeNetwork {
  public:
   FakeNetwork();
-  std::shared_ptr<mojo::URLLoader> MakeURLLoader();
+  std::shared_ptr<network::URLLoader> MakeURLLoader();
 
  private:
   std::thread thread_;
   ftl::RefPtr<ftl::TaskRunner> task_runner_;
 };
 
-}  // namespace component_manager
+}  // namespace component
 
 #endif  // APPS_COMPONENT_MANAGER_FAKE_NETWORK_H_

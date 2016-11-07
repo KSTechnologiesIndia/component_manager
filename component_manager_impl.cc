@@ -2,26 +2,30 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "apps/component_manager/component_manager_impl.h"
+
 #include <string>
 #include <iostream>
 
-#include "apps/component_manager/component_manager_impl.h"
 #include "apps/component_manager/fake_network.h"
+#include "apps/component_manager/services/component.fidl.h"
 #include "lib/ftl/functional/make_copyable.h"
 #include "lib/ftl/logging.h"
-#include "lib/mtl/shared_buffer/strings.h"
+#include "lib/mtl/vmo/strings.h"
 #include "third_party/rapidjson/rapidjson/document.h"
 #include "third_party/rapidjson/rapidjson/stringbuffer.h"
 #include "third_party/rapidjson/rapidjson/writer.h"
 
-namespace component_manager {
+namespace component {
 
+/*
 constexpr char kProgramFacet[] = "fuchsia:program";
 constexpr char kProgramUrlProperty[] = "url";
+*/
 
 namespace {
 
-bool JsonToFacetData(const rapidjson::Value& value, mojo::FacetDataPtr* facet_data) {
+bool JsonToFacetData(const rapidjson::Value& value, FacetDataPtr* facet_data) {
   FTL_DCHECK(facet_data != nullptr);
 
   if (value.IsString()) {
@@ -30,25 +34,25 @@ bool JsonToFacetData(const rapidjson::Value& value, mojo::FacetDataPtr* facet_da
   }
 
   if (value.IsArray()) {
-    auto array = mojo::Array<mojo::FacetDataPtr>::New(value.Size());
+    auto array = fidl::Array<FacetDataPtr>::New(value.Size());
     for (size_t i = 0; i < value.Size(); i++) {
       if (!JsonToFacetData(value[i], &array[i])) {
         return false;
       }
     }
-    (*facet_data)->set_array(array.Pass());
+    (*facet_data)->set_array(std::move(array));
     return true;
   }
 
   if (value.IsObject()) {
-    mojo::Map<mojo::String, mojo::FacetDataPtr> map;
+    fidl::Map<fidl::String, FacetDataPtr> map;
     for (auto i = value.MemberBegin(); i != value.MemberEnd(); ++i) {
-      auto member = mojo::FacetData::New();
+      auto member = FacetData::New();
       if (JsonToFacetData(i->value, &member)) {
         map.insert(i->name.GetString(), std::move(member));
       }
     }
-    (*facet_data)->set_object(map.Pass());
+    (*facet_data)->set_object(std::move(map));
     return true;
   }
 
@@ -57,8 +61,9 @@ bool JsonToFacetData(const rapidjson::Value& value, mojo::FacetDataPtr* facet_da
   return false;
 }
 
-std::string ProgramUrlFromManifest(const mojo::ComponentManifestPtr* component_manifest) {
-  const mojo::FacetDataPtr& program_facet = (*component_manifest)->facets[kProgramFacet];
+/*
+std::string ProgramUrlFromManifest(const ComponentManifestPtr* component_manifest) {
+  const FacetDataPtr& program_facet = (*component_manifest)->facets[kProgramFacet];
   if (!program_facet) {
     FTL_LOG(ERROR) << "manifest for " << (*component_manifest)->id << " missing " << kProgramFacet;
     return "";
@@ -68,7 +73,7 @@ std::string ProgramUrlFromManifest(const mojo::ComponentManifestPtr* component_m
                    << " isn't an object";
     return "";
   }
-  const mojo::FacetDataPtr& url = program_facet->get_object()[kProgramUrlProperty];
+  const FacetDataPtr& url = program_facet->get_object()[kProgramUrlProperty];
   if (!url->is_string()) {
     FTL_LOG(ERROR) << "manifest for " << (*component_manifest)->id << " doesn't have a string "
                    << kProgramFacet << "/" << kProgramUrlProperty;
@@ -77,9 +82,10 @@ std::string ProgramUrlFromManifest(const mojo::ComponentManifestPtr* component_m
 
   return url->get_string();
 }
+*/
 
-mojo::NetworkErrorPtr MakeNetworkError(int code, const std::string& description) {
-  auto error = mojo::NetworkError::New();
+network::NetworkErrorPtr MakeNetworkError(int code, const std::string& description) {
+  auto error = network::NetworkError::New();
   error->code = code;
   error->description = description;
   return error;
@@ -87,26 +93,22 @@ mojo::NetworkErrorPtr MakeNetworkError(int code, const std::string& description)
 
 }  // namespace
 
-void ComponentManagerImpl::Initialize(mojo::ApplicationConnectorPtr application_connector) {
-  application_connector_ = application_connector.Pass();
-}
-
-void ComponentManagerImpl::GetComponentManifest(const mojo::String& component_id,
+void ComponentManagerImpl::GetComponentManifest(const fidl::String& component_id,
                                                 const GetComponentManifestCallback& callback) {
   FTL_LOG(INFO) << "ComponentManagerImpl::GetComponentManifest(\"" << component_id << "\")";
 
-  mojo::URLRequestPtr request = mojo::URLRequest::New();
-  request->response_body_mode = mojo::URLRequest::ResponseBodyMode::BUFFER;
+  network::URLRequestPtr request = network::URLRequest::New();
+  request->response_body_mode = network::URLRequest::ResponseBodyMode::BUFFER;
   request->url = component_id;
 
   auto url_loader = fake_network_.MakeURLLoader();
 
   url_loader->Start(
-      std::move(request), [component_id, callback, url_loader](mojo::URLResponsePtr response) {
+      std::move(request), [component_id, callback, url_loader](network::URLResponsePtr response) {
         FTL_LOG(INFO) << "URL Loader Start Callback";
         if (response->error) {
           FTL_LOG(ERROR) << "URL response contained error: " << response->error->description;
-          callback.Run(nullptr, std::move(response->error));
+          callback(nullptr, std::move(response->error));
           return;
         }
 
@@ -115,30 +117,30 @@ void ComponentManagerImpl::GetComponentManifest(const mojo::String& component_id
         std::string contents;
         FTL_DCHECK(response->body->is_buffer());
 
-        if (!mtl::StringFromSharedBuffer(std::move(response->body->get_buffer()), &contents)) {
+        if (!mtl::StringFromVmo(std::move(response->body->get_buffer()), &contents)) {
           FTL_LOG(ERROR) << "Failed to read URL response.";
-          callback.Run(nullptr, MakeNetworkError(0, "Failed to read URL response."));
+          callback(nullptr, MakeNetworkError(0, "Failed to read URL response."));
           return;
         }
 
         rapidjson::Document doc;
         if (doc.Parse(contents.c_str()).HasParseError()) {
           FTL_LOG(ERROR) << "Failed to parse component manifest at: " << component_id;
-          callback.Run(nullptr, MakeNetworkError(0, "Failed to parse component manifest."));
+          callback(nullptr, MakeNetworkError(0, "Failed to parse component manifest."));
           return;
         }
 
         if (!doc.IsObject()) {
           FTL_LOG(ERROR) << "Component manifest " << component_id << " is not a JSON object";
-          callback.Run(nullptr, MakeNetworkError(0, "Component manifest is not a JSON object"));
+          callback(nullptr, MakeNetworkError(0, "Component manifest is not a JSON object"));
           return;
         }
 
-        auto manifest = mojo::ComponentManifest::New();
+        auto manifest = ComponentManifest::New();
         manifest->id = component_id;
 
         for (auto i = doc.MemberBegin(); i != doc.MemberEnd(); ++i) {
-          auto facet_data = mojo::FacetData::New();
+          auto facet_data = FacetData::New();
           if (JsonToFacetData(i->value, &facet_data)) {
             manifest->facets.insert(i->name.GetString(), std::move(facet_data));
           } else {
@@ -146,10 +148,11 @@ void ComponentManagerImpl::GetComponentManifest(const mojo::String& component_id
           }
         }
 
-        callback.Run(std::move(manifest), nullptr);
+        callback(std::move(manifest), nullptr);
       });
 }
 
+/*
 void ComponentManagerImpl::ConnectToComponent(
     const mojo::String& component_id,
     mojo::InterfaceRequest<mojo::ServiceProvider> service_provider) {
@@ -177,5 +180,6 @@ void ComponentManagerImpl::ConnectToComponent(
 
   GetComponentManifest(component_id, callback);
 }
+*/
 
-}  // namespace component_manager
+}  // namespace component

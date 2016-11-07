@@ -6,7 +6,7 @@ group("examples") {
   testonly = true
 
   deps = [
-    "hello_component",
-    "request_components",
+#    "hello_component",
+#    "request_components",
   ]
 }

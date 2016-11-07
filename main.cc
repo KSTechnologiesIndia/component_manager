@@ -2,52 +2,39 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include <mojo/system/main.h>
-
+#include "apps/component_manager/component_manager_impl.h"
+#include "apps/component_manager/services/component.fidl.h"
+#include "apps/modular/lib/app/application_context.h"
 #include "lib/ftl/logging.h"
 #include "lib/ftl/macros.h"
-#include "apps/component_manager/component_manager_impl.h"
-#include "mojo/public/cpp/application/application_impl_base.h"
-#include "mojo/public/cpp/application/run_application.h"
-#include "mojo/public/cpp/application/service_provider_impl.h"
-#include "mojo/public/cpp/bindings/binding_set.h"
-#include "apps/component_manager/interfaces/component.mojom.h"
+#include "lib/mtl/tasks/message_loop.h"
+#include "lib/fidl/cpp/bindings/binding_set.h"
 
-namespace component_manager {
+namespace component {
 
-class ComponentManagerApp : public mojo::ApplicationImplBase {
+class App {
  public:
-  ComponentManagerApp() {}
-
-  void OnInitialize() override {
-    FTL_LOG(INFO) << "ComponentManagerApp.OnInitialize()";
-
-    mojo::ApplicationConnectorPtr application_connector;
-    shell()->CreateApplicationConnector(mojo::GetProxy(&application_connector));
-
-    impl_.Initialize(application_connector.Pass());
-  }
-
-  bool OnAcceptConnection(mojo::ServiceProviderImpl* service_provider_impl) override {
-    service_provider_impl->AddService<mojo::ComponentManager>(
-        [this](const mojo::ConnectionContext& connection_context,
-               mojo::InterfaceRequest<mojo::ComponentManager> request) {
-          bindings_.AddBinding(&impl_, request.Pass());
+  App() : context_(modular::ApplicationContext::CreateFromStartupInfo()) {
+    context_->outgoing_services()->AddService<ComponentManager>(
+        [this](fidl::InterfaceRequest<ComponentManager> request) {
+          bindings_.AddBinding(&impl_, std::move(request));
         });
-    return true;
   }
 
  private:
   ComponentManagerImpl impl_;
-  mojo::BindingSet<mojo::ComponentManager> bindings_;
+  fidl::BindingSet<ComponentManager> bindings_;
+  std::unique_ptr<modular::ApplicationContext> context_;
 
-  FTL_DISALLOW_COPY_AND_ASSIGN(ComponentManagerApp);
+  FTL_DISALLOW_COPY_AND_ASSIGN(App);
 };
 
-}  // namespace component_manager
+}  // namespace component
 
-MojoResult MojoMain(MojoHandle application_request) {
+int main(int argc, const char** argv) {
   FTL_LOG(INFO) << "component_manager MojoMain";
-  component_manager::ComponentManagerApp app;
-  return mojo::RunApplication(application_request, &app);
+  mtl::MessageLoop loop;
+  component::App app;
+  loop.Run();
+  return 0;
 }

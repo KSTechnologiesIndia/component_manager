@@ -6,31 +6,30 @@
 #define APPS_COMPONENT_MANAGER_IMPL_H_
 
 #include "apps/component_manager/fake_network.h"
-#include "apps/component_manager/interfaces/component.mojom.h"
-#include "apps/network/interfaces/url_loader.mojom.h"
+#include "apps/component_manager/services/component.fidl.h"
+#include "apps/network/services/url_loader.fidl.h"
 #include "lib/ftl/macros.h"
-#include "mojo/public/cpp/bindings/interface_ptr.h"
-#include "mojo/public/interfaces/application/application_connector.mojom.h"
 
-namespace component_manager {
+namespace component {
 
-class ComponentManagerImpl : public mojo::ComponentManager {
+class ComponentManagerImpl : public component::ComponentManager {
  public:
   ComponentManagerImpl() {}
-  void Initialize(mojo::ApplicationConnectorPtr application_connector);
 
-  void GetComponentManifest(const mojo::String& component_id,
+  void GetComponentManifest(const fidl::String& component_id,
                             const GetComponentManifestCallback& callback) override;
+  /*
   void ConnectToComponent(const mojo::String& component_id,
                           mojo::InterfaceRequest<mojo::ServiceProvider> service_provider) override;
+                          */
 
  private:
-  mojo::ApplicationConnectorPtr application_connector_;
+  // mojo::ApplicationConnectorPtr application_connector_;
   FakeNetwork fake_network_;
 
   FTL_DISALLOW_COPY_AND_ASSIGN(ComponentManagerImpl);
 };
 
-}  // namespace component_manager
+}  // namespace component
 
 #endif  // APPS_COMPONENT_MANAGER_IMPL_H_

@@ -15,10 +15,11 @@
 #include "lib/ftl/files/file.h"
 #include "lib/ftl/files/path.h"
 #include "lib/ftl/logging.h"
-#include "lib/mtl/shared_buffer/strings.h"
+#include "lib/mtl/vmo/strings.h"
 #include "lib/mtl/threading/create_thread.h"
+#include "mx/vmo.h"
 
-namespace component_manager {
+namespace component {
 
 namespace {
 
@@ -31,42 +32,42 @@ std::string PathForUrl(const std::string& url) {
 
 }  // namespace
 
-class FakeURLLoader : public mojo::URLLoader {
+class FakeURLLoader : public network::URLLoader {
  public:
   FakeURLLoader(ftl::RefPtr<ftl::TaskRunner> task_runner)
       : task_runner_(task_runner) {}
-  void Start(mojo::URLRequestPtr request,
+  void Start(network::URLRequestPtr request,
              const StartCallback& callback) override {
-    mojo::URLResponsePtr response = mojo::URLResponse::New();
+    network::URLResponsePtr response = network::URLResponse::New();
     response->url = request->url;
 
     if ((request->response_body_mode !=
-         mojo::URLRequest::ResponseBodyMode::BUFFER) &&
+         network::URLRequest::ResponseBodyMode::BUFFER) &&
         (request->response_body_mode !=
-         mojo::URLRequest::ResponseBodyMode::BUFFER_OR_STREAM)) {
+         network::URLRequest::ResponseBodyMode::BUFFER_OR_STREAM)) {
       // Only know how to return buffered responses.
       response->status_code = 500;
-      response->error = mojo::NetworkError::New();
+      response->error = network::NetworkError::New();
       response->error->description = "Only Buffered Responses Supported.";
-      callback.Run(std::move(response));
+      callback(std::move(response));
       return;
     }
 
     std::string contents;
-    mojo::ScopedSharedBufferHandle shared_buffer;
+    mx::vmo shared_buffer;
     auto path = PathForUrl(request->url);
     if (!files::ReadFileToString(path, &contents) ||
-        !mtl::SharedBufferFromString(contents, &shared_buffer)) {
+        !mtl::VmoFromString(contents, &shared_buffer)) {
       response->status_code = 404;
-      response->error = mojo::NetworkError::New();
+      response->error = network::NetworkError::New();
       response->error->code = errno;
       response->error->description = strerror(errno);
     } else {
       response->status_code = 200;
-      response->body = mojo::URLBody::New();
+      response->body = network::URLBody::New();
       response->body->set_buffer(std::move(shared_buffer));
     }
-    callback.Run(std::move(response));
+    callback(std::move(response));
   }
   void FollowRedirect(const FollowRedirectCallback& callback) override {
     FTL_NOTIMPLEMENTED();
@@ -83,8 +84,8 @@ FakeNetwork::FakeNetwork() {
   thread_ = mtl::CreateThread(&task_runner_);
 }
 
-std::shared_ptr<mojo::URLLoader> FakeNetwork::MakeURLLoader() {
-  return std::shared_ptr<mojo::URLLoader>(new FakeURLLoader(task_runner_));
+std::shared_ptr<network::URLLoader> FakeNetwork::MakeURLLoader() {
+  return std::shared_ptr<network::URLLoader>(new FakeURLLoader(task_runner_));
 }
 
-}  // namespace
+}  // namespace component
