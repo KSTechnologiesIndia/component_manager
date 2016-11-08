@@ -16,7 +16,7 @@ executable("component_manager_program") {
   deps = [
     "//apps/component_manager/services",
     "//apps/modular/lib/app",
-    "//apps/network",
+    "//apps/network/services",
     "//lib/ftl",
     "//lib/mtl",
     "//third_party/rapidjson",
