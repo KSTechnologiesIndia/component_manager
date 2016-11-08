@@ -32,7 +32,6 @@ class App {
 }  // namespace component
 
 int main(int argc, const char** argv) {
-  FTL_LOG(INFO) << "component_manager MojoMain";
   mtl::MessageLoop loop;
   component::App app;
   loop.Run();

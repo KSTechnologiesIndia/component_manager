@@ -25,6 +25,18 @@ struct ComponentManifest {
 interface ComponentManager {
   GetComponentManifest(string component_id)
       => (ComponentManifest? component_manifest, network.NetworkError? error);
+
+  // Searches all Components known by the ComponentManager for those matching
+  // the query criteria in |facet_values|.A ComponentManifest will match if
+  // it has a facet for each key in |facet_values|, and, if the value for that
+  // key is non-NULL, each property value in the corresponding |FacetData|
+  // must match that in the |FacetData| for that key in the ComponentManifest.
+  //
+  // TODO(thatguy): |facet_values| should become a more descriptive query
+  // representation when more than property equality is needed.
+  FindComponentManifests(map<string, FacetData?> facet_values)
+      => (array<ComponentManifest> results);
+
   // TODO(thatguy): Find the right home for this, and develop some healthy
   // patterns around launching apps defined in a component manifest.
   // ConnectToComponent(string component_id, modular.ServiceProvider& service_provider);

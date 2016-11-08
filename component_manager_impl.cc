@@ -9,6 +9,8 @@
 
 #include "apps/component_manager/fake_network.h"
 #include "apps/component_manager/services/component.fidl.h"
+#include "apps/component_manager/services/format.h"
+#include "lib/ftl/files/file.h"
 #include "lib/ftl/functional/make_copyable.h"
 #include "lib/ftl/logging.h"
 #include "lib/mtl/vmo/strings.h"
@@ -22,67 +24,10 @@ namespace component {
 constexpr char kProgramFacet[] = "fuchsia:program";
 constexpr char kProgramUrlProperty[] = "url";
 */
+// This path must be in sync with //packages/gn/component_manager.
+constexpr char kLocalIndexPath[] = "/system/components/index.json";
 
 namespace {
-
-bool JsonToFacetData(const rapidjson::Value& value, FacetDataPtr* facet_data) {
-  FTL_DCHECK(facet_data != nullptr);
-
-  if (value.IsString()) {
-    (*facet_data)->set_string(value.GetString());
-    return true;
-  }
-
-  if (value.IsArray()) {
-    auto array = fidl::Array<FacetDataPtr>::New(value.Size());
-    for (size_t i = 0; i < value.Size(); i++) {
-      if (!JsonToFacetData(value[i], &array[i])) {
-        return false;
-      }
-    }
-    (*facet_data)->set_array(std::move(array));
-    return true;
-  }
-
-  if (value.IsObject()) {
-    fidl::Map<fidl::String, FacetDataPtr> map;
-    for (auto i = value.MemberBegin(); i != value.MemberEnd(); ++i) {
-      auto member = FacetData::New();
-      if (JsonToFacetData(i->value, &member)) {
-        map.insert(i->name.GetString(), std::move(member));
-      }
-    }
-    (*facet_data)->set_object(std::move(map));
-    return true;
-  }
-
-  // Failed to convert rapidjson::Value.
-
-  return false;
-}
-
-/*
-std::string ProgramUrlFromManifest(const ComponentManifestPtr* component_manifest) {
-  const FacetDataPtr& program_facet = (*component_manifest)->facets[kProgramFacet];
-  if (!program_facet) {
-    FTL_LOG(ERROR) << "manifest for " << (*component_manifest)->id << " missing " << kProgramFacet;
-    return "";
-  }
-  if (!program_facet->is_object()) {
-    FTL_LOG(ERROR) << "manifest for " << (*component_manifest)->id << " " << kProgramFacet
-                   << " isn't an object";
-    return "";
-  }
-  const FacetDataPtr& url = program_facet->get_object()[kProgramUrlProperty];
-  if (!url->is_string()) {
-    FTL_LOG(ERROR) << "manifest for " << (*component_manifest)->id << " doesn't have a string "
-                   << kProgramFacet << "/" << kProgramUrlProperty;
-    return "";
-  }
-
-  return url->get_string();
-}
-*/
 
 network::NetworkErrorPtr MakeNetworkError(int code, const std::string& description) {
   auto error = network::NetworkError::New();
@@ -91,7 +36,101 @@ network::NetworkErrorPtr MakeNetworkError(int code, const std::string& descripti
   return error;
 }
 
+class BarrierCallback {
+ public:
+  BarrierCallback(int n, std::function<void()> callback)
+      : n_(n), callback_(callback) {}
+
+  void Decrement() {
+    n_--;
+    if (n_ == 0) {
+      callback_();
+      delete this;
+    }
+  }
+
+ private:
+  int n_;
+  std::function<void()> callback_;
+};
+
+bool FacetDataMatches(const FacetDataPtr& facet_data,
+                      const FacetDataPtr& filter_data) {
+  if (!filter_data) {
+    // This was just an existence filter, so return true.
+    return true;
+  }
+  if (facet_data->which() != filter_data->which())
+    return false;
+
+  if (facet_data->is_object()) {
+    // Go through each key in 'filter_data' and recursively check for the same
+    // equal property in 'facet_data'. If any values in 'filter_data' don't
+    // match, return false. In short ensure that 'filter_data' is a subset
+    // of 'facet_data'.
+    for (auto it = filter_data->get_object().cbegin();
+         it != filter_data->get_object().cend(); ++it) {
+      auto data_it = facet_data->get_object().find(it.GetKey());
+      if (data_it == facet_data->get_object().end())
+        return false;
+      return FacetDataMatches(data_it.GetValue(), it.GetValue());
+    }
+  } else if (facet_data->is_array()) {
+    // Every array element in 'filter_data' should match an element
+    // in facet_data.
+    FTL_LOG(FATAL) << "Filtering by array not implemented.";
+    return false;
+  } else if (facet_data->is_string()) {
+    return facet_data->get_string() == filter_data->get_string();
+  }
+
+  // Unreachable.
+  return true;
+}
+
+bool ManifestMatches(const ComponentManifestPtr& manifest,
+                     const fidl::Map<fidl::String, FacetDataPtr>& filter) {
+  for (auto it = filter.cbegin(); it != filter.cend(); ++it) {
+    // See if the manifest under consideration has this facet.
+    const auto& facet_type = it.GetKey();
+    if (manifest->facets.find(facet_type) == manifest->facets.end()) {
+      return false;
+    }
+
+    // See if the filter's FacetData matches that in the facet.
+    const auto& filter_data = it.GetValue();
+    const auto& facet_data = manifest->facets[facet_type];
+
+    if (!FacetDataMatches(facet_data, filter_data)) {
+      // Nope.
+      return false;
+    }
+  }
+
+  return true;
+}
+
 }  // namespace
+
+ComponentManagerImpl::ComponentManagerImpl() {
+  // Initialize the local index.
+  std::string contents;
+  FTL_CHECK(files::ReadFileToString(kLocalIndexPath, &contents));
+
+  rapidjson::Document doc;
+  if (doc.Parse(contents.c_str()).HasParseError()) {
+    FTL_LOG(FATAL) << "Failed to parse JSON component index at: "
+                   << kLocalIndexPath;
+  }
+
+  if (!doc.IsArray()) {
+    FTL_LOG(FATAL) << "Malformed component index at: " << kLocalIndexPath;
+  }
+
+  for (const rapidjson::Value& uri : doc.GetArray()) {
+    local_index_.push_back(uri.GetString());
+  }
+}
 
 void ComponentManagerImpl::GetComponentManifest(const fidl::String& component_id,
                                                 const GetComponentManifestCallback& callback) {
@@ -152,34 +191,33 @@ void ComponentManagerImpl::GetComponentManifest(const fidl::String& component_id
       });
 }
 
-/*
-void ComponentManagerImpl::ConnectToComponent(
-    const mojo::String& component_id,
-    mojo::InterfaceRequest<mojo::ServiceProvider> service_provider) {
-  FTL_LOG(INFO) << "ComponentManagerImpl::ConnectToComponent(\"" << component_id << "\")";
-  if (!application_connector_) {
-    FTL_LOG(ERROR) << "Request for " << component_id << " before component manager is initialized";
-    return;
-  }
-
-  std::function<void(mojo::ComponentManifestPtr, mojo::NetworkErrorPtr)> callback =
-      ftl::MakeCopyable([ service_provider = std::move(service_provider), this ](
-          mojo::ComponentManifestPtr component_manifest,
-          mojo::NetworkErrorPtr network_error) mutable {
-        if (network_error) {
-          FTL_LOG(ERROR) << "network error: " << network_error->description;
-          return;
-        }
-        FTL_DCHECK(component_manifest);
-        FTL_LOG(INFO) << "callback with " << component_manifest->id;
-
-        auto url = ProgramUrlFromManifest(&component_manifest);
-        FTL_LOG(INFO) << " url=" << url;
-        application_connector_->ConnectToApplication(url, std::move(service_provider));
+void ComponentManagerImpl::FindComponentManifests(
+    fidl::Map<fidl::String, FacetDataPtr> facet_values,
+    const FindComponentManifestsCallback& callback) {
+  std::vector<ComponentManifestPtr>* results =
+      new std::vector<ComponentManifestPtr>();
+  // Self-deleting.
+  BarrierCallback* barrier =
+      new BarrierCallback(local_index_.size(), [results, callback] {
+        fidl::Array<ComponentManifestPtr> fidl_results;
+        fidl_results.Swap(results);
+        delete results;
+        callback(std::move(fidl_results));
       });
 
-  GetComponentManifest(component_id, callback);
+  for (const std::string& uri : local_index_) {
+    auto facet_values_copy = facet_values.Clone();
+    GetComponentManifest(
+        fidl::String(uri), [ results, barrier, &filter = facet_values_copy ](
+                               ComponentManifestPtr manifest,
+                               network::NetworkErrorPtr network_error) mutable {
+          // Check if the manifest matches.
+          if (!network_error && ManifestMatches(manifest, filter)) {
+            results->push_back(std::move(manifest));
+          }
+          barrier->Decrement();
+        });
+  }
 }
-*/
 
 }  // namespace component

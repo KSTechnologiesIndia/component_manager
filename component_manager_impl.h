@@ -14,18 +14,20 @@ namespace component {
 
 class ComponentManagerImpl : public component::ComponentManager {
  public:
-  ComponentManagerImpl() {}
+  ComponentManagerImpl();
 
   void GetComponentManifest(const fidl::String& component_id,
                             const GetComponentManifestCallback& callback) override;
-  /*
-  void ConnectToComponent(const mojo::String& component_id,
-                          mojo::InterfaceRequest<mojo::ServiceProvider> service_provider) override;
-                          */
+
+  void FindComponentManifests(
+      fidl::Map<fidl::String, FacetDataPtr> facet_values,
+      const FindComponentManifestsCallback& callback) override;
 
  private:
-  // mojo::ApplicationConnectorPtr application_connector_;
   FakeNetwork fake_network_;
+
+  // A list of component URIs that are installed locally.
+  std::vector<std::string> local_index_;
 
   FTL_DISALLOW_COPY_AND_ASSIGN(ComponentManagerImpl);
 };

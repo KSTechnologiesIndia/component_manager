@@ -13,3 +13,15 @@ fidl("services") {
     "//apps/network/services",
   ]
 }
+
+source_set("format") {
+  sources = [
+    "format.h",
+    "format.cc",
+  ]
+
+  deps = [
+    ":services",
+    "//third_party/rapidjson",
+  ]
+}

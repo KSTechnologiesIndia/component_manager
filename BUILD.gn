@@ -15,6 +15,7 @@ executable("component_manager_program") {
 
   deps = [
     "//apps/component_manager/services",
+    "//apps/component_manager/services:format",
     "//apps/modular/lib/app",
     "//apps/network/services",
     "//lib/ftl",
@@ -23,6 +24,20 @@ executable("component_manager_program") {
   ]
 
   libs = [ "mxio" ]
+}
+
+executable("components_main") {
+  sources = [
+    "components_main.cc",
+  ]
+
+  deps = [
+    "//apps/component_manager/services",
+    "//apps/component_manager/services:format",
+    "//apps/modular/lib/app",
+    "//lib/ftl",
+    "//lib/mtl",
+  ]
 }
 
 fuchsia_component("component_manager") {
