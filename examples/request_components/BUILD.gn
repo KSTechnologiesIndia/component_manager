@@ -4,11 +4,10 @@
 
 executable("request_components") {
   deps = [
-    "//apps/component_manager/interfaces",
+    "//apps/component_manager/services",
+    "//apps/modular/lib/app",
     "//lib/ftl",
     "//lib/mtl",
-    "//mojo/public/cpp/application",
-    "//mojo/system",
   ]
 
   sources = [

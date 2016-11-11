@@ -6,11 +6,11 @@ import("//build/component/component.gni")
 
 executable("hello_program") {
   deps = [
-    "//apps/component_manager/interfaces",
+    "//apps/component_manager/services",
+    "//apps/modular/lib/app",
+    "//lib/fidl/cpp/bindings",
     "//lib/ftl",
     "//lib/mtl",
-    "//mojo/public/cpp/application",
-    "//mojo/system",
   ]
 
   sources = [

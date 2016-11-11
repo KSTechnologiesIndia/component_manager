@@ -2,43 +2,44 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include <mojo/system/main.h>
-#include <stdio.h>
-
 #include <string>
 
-#include "apps/component_manager/interfaces/component.mojom.h"
+#include "apps/component_manager/services/component.fidl.h"
+#include "apps/modular/lib/app/application_context.h"
+#include "apps/modular/lib/app/connect.h"
+#include "lib/fidl/cpp/bindings/interface_request.h"
 #include "lib/ftl/logging.h"
 #include "lib/ftl/macros.h"
-#include "mojo/public/cpp/application/application_impl_base.h"
-#include "mojo/public/cpp/application/connect.h"
-#include "mojo/public/cpp/application/run_application.h"
-
-using mojo::ComponentManagerPtr;
+#include "lib/mtl/tasks/message_loop.h"
 
 namespace {
 
-class RequestComponentApp : public mojo::ApplicationImplBase {
+class RequestComponentApp {
  public:
-  RequestComponentApp() {}
-  ~RequestComponentApp() override {}
-
-  void OnInitialize() override {
-    mojo::ConnectToService(shell(), "mojo:component_manager", GetProxy(&component_manager_));
-
-    mojo::ServiceProviderPtr service_provider;
-    component_manager_->ConnectToComponent("fuchsia:hello_component", GetProxy(&service_provider));
+  RequestComponentApp()
+      : context_(modular::ApplicationContext::CreateFromStartupInfo()) {
+    component_manager_ =
+        context_->ConnectToEnvironmentService<component::ComponentManager>();
+    component_manager_->GetComponentManifest(
+        "fuchsia:hello_component",
+        [this](component::ComponentManifestPtr manifest,
+               network::NetworkErrorPtr error) {
+          FTL_LOG(INFO) << "GetComponentManifeset returned.";
+        });
   }
 
  private:
-  ComponentManagerPtr component_manager_;
+  std::unique_ptr<modular::ApplicationContext> context_;
+  fidl::InterfacePtr<component::ComponentManager> component_manager_;
 
   FTL_DISALLOW_COPY_AND_ASSIGN(RequestComponentApp);
 };
 
 }  // namespace
 
-MojoResult MojoMain(MojoHandle application_request) {
-  RequestComponentApp Request_component_app;
-  return mojo::RunApplication(application_request, &Request_component_app);
+int main(int argc, const char** argv) {
+  mtl::MessageLoop loop;
+  RequestComponentApp app;
+  loop.Run();
+  return 0;
 }

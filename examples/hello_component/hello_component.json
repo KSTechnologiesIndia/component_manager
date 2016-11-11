@@ -7,7 +7,7 @@
     "resource": "main"
   },
   "fuchsia:resources": {
-    "main": "hello_component.mojo",
+    "main": "hello_component",
     "hello": "hello.txt"
   }
 }

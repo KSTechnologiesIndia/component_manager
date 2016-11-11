@@ -2,36 +2,30 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include <mojo/system/main.h>
-#include <stdio.h>
-
 #include <string>
 
-#include "apps/component_manager/interfaces/component.mojom.h"
+#include "apps/modular/lib/app/application_context.h"
 #include "lib/ftl/logging.h"
 #include "lib/ftl/macros.h"
-#include "mojo/public/cpp/application/application_impl_base.h"
-#include "mojo/public/cpp/application/connect.h"
-#include "mojo/public/cpp/application/run_application.h"
-
-using mojo::ComponentManagerPtr;
 
 namespace {
 
-class HelloComponentApp : public mojo::ApplicationImplBase {
+class HelloComponentApp {
  public:
-  HelloComponentApp() {}
-  ~HelloComponentApp() override {}
-
-  void OnInitialize() override { FTL_LOG(INFO) << "HelloComponentApp::OnInitialize()"; }
+  HelloComponentApp()
+      : context_(modular::ApplicationContext::CreateFromStartupInfo()) {
+    FTL_LOG(INFO) << "HelloComponentApp::OnInitialize()";
+  }
 
  private:
+  std::unique_ptr<modular::ApplicationContext> context_;
   FTL_DISALLOW_COPY_AND_ASSIGN(HelloComponentApp);
 };
 
 }  // namespace
 
-MojoResult MojoMain(MojoHandle application_request) {
+int main(int argc, const char** argv) {
+  FTL_LOG(INFO) << "hello_component main";
   HelloComponentApp hello_component_app;
-  return mojo::RunApplication(application_request, &hello_component_app);
+  return 0;
 }
