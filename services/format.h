@@ -9,9 +9,9 @@
 
 namespace component {
 
-bool JsonToFacetData(const rapidjson::Value& value, FacetDataPtr* facet_data);
-bool FacetDataToJson(const FacetDataPtr& facet_data, rapidjson::Document* doc);
+bool JsonToFacetInfo(const rapidjson::Value& value, FacetInfoPtr* facet_info);
+bool FacetInfoToJson(const FacetInfoPtr& facet_info, rapidjson::Document* doc);
 
-std::string FacetDataToString(const FacetDataPtr& facet_data);
+std::string FacetInfoToString(const FacetInfoPtr& facet_info);
 
 }  // namespace

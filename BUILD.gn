@@ -4,13 +4,13 @@
 
 import("//build/component/component.gni")
 
-executable("component_manager_program") {
+executable("component_manager_main") {
   sources = [
-    "component_manager_impl.cc",
-    "component_manager_impl.h",
+    "component_index_impl.cc",
+    "component_index_impl.h",
+    "component_manager_main.cc",
     "fake_network.cc",
     "fake_network.h",
-    "main.cc",
   ]
 
   deps = [
@@ -42,5 +42,5 @@ executable("components_main") {
 
 fuchsia_component("component_manager") {
   manifest = "component_manager.json"
-  program = ":component_manager_program"
+  program = ":component_manager_main"
 }

@@ -2,8 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#ifndef APPS_COMPONENT_MANAGER_IMPL_H_
-#define APPS_COMPONENT_MANAGER_IMPL_H_
+#ifndef APPS_COMPONENT_INDEX_IMPL_H_
+#define APPS_COMPONENT_INDEX_IMPL_H_
 
 #include "apps/component_manager/fake_network.h"
 #include "apps/component_manager/services/component.fidl.h"
@@ -12,15 +12,15 @@
 
 namespace component {
 
-class ComponentManagerImpl : public component::ComponentManager {
+class ComponentIndexImpl : public component::ComponentIndex {
  public:
-  ComponentManagerImpl();
+  ComponentIndexImpl();
 
   void GetComponentManifest(const fidl::String& component_id,
                             const GetComponentManifestCallback& callback) override;
 
   void FindComponentManifests(
-      fidl::Map<fidl::String, FacetDataPtr> facet_values,
+      fidl::Map<fidl::String, FacetInfoPtr> filter,
       const FindComponentManifestsCallback& callback) override;
 
  private:
@@ -29,9 +29,9 @@ class ComponentManagerImpl : public component::ComponentManager {
   // A list of component URIs that are installed locally.
   std::vector<std::string> local_index_;
 
-  FTL_DISALLOW_COPY_AND_ASSIGN(ComponentManagerImpl);
+  FTL_DISALLOW_COPY_AND_ASSIGN(ComponentIndexImpl);
 };
 
 }  // namespace component
 
-#endif  // APPS_COMPONENT_MANAGER_IMPL_H_
+#endif  // APPS_COMPONENT_INDEX_IMPL_H_

@@ -18,9 +18,9 @@ class RequestComponentApp {
  public:
   RequestComponentApp()
       : context_(modular::ApplicationContext::CreateFromStartupInfo()) {
-    component_manager_ =
-        context_->ConnectToEnvironmentService<component::ComponentManager>();
-    component_manager_->GetComponentManifest(
+    component_index_ =
+        context_->ConnectToEnvironmentService<component::ComponentIndex>();
+    component_index_->GetComponentManifest(
         "fuchsia:hello_component",
         [this](component::ComponentManifestPtr manifest,
                network::NetworkErrorPtr error) {
@@ -30,7 +30,7 @@ class RequestComponentApp {
 
  private:
   std::unique_ptr<modular::ApplicationContext> context_;
-  fidl::InterfacePtr<component::ComponentManager> component_manager_;
+  fidl::InterfacePtr<component::ComponentIndex> component_index_;
 
   FTL_DISALLOW_COPY_AND_ASSIGN(RequestComponentApp);
 };

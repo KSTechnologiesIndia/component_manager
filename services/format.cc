@@ -6,34 +6,34 @@
 
 namespace component {
 
-bool JsonToFacetData(const rapidjson::Value& value, FacetDataPtr* facet_data) {
-  FTL_DCHECK(facet_data != nullptr);
+bool JsonToFacetInfo(const rapidjson::Value& value, FacetInfoPtr* facet_info) {
+  FTL_DCHECK(facet_info != nullptr);
 
   if (value.IsString()) {
-    (*facet_data)->set_string(value.GetString());
+    (*facet_info)->set_string(value.GetString());
     return true;
   }
 
   if (value.IsArray()) {
-    auto array = fidl::Array<FacetDataPtr>::New(value.Size());
+    auto array = fidl::Array<FacetInfoPtr>::New(value.Size());
     for (size_t i = 0; i < value.Size(); i++) {
-      if (!JsonToFacetData(value[i], &array[i])) {
+      if (!JsonToFacetInfo(value[i], &array[i])) {
         return false;
       }
     }
-    (*facet_data)->set_array(std::move(array));
+    (*facet_info)->set_array(std::move(array));
     return true;
   }
 
   if (value.IsObject()) {
-    fidl::Map<fidl::String, FacetDataPtr> map;
+    fidl::Map<fidl::String, FacetInfoPtr> map;
     for (auto i = value.MemberBegin(); i != value.MemberEnd(); ++i) {
-      auto member = FacetData::New();
-      if (JsonToFacetData(i->value, &member)) {
+      auto member = FacetInfo::New();
+      if (JsonToFacetInfo(i->value, &member)) {
         map.insert(i->name.GetString(), std::move(member));
       }
     }
-    (*facet_data)->set_object(std::move(map));
+    (*facet_info)->set_object(std::move(map));
     return true;
   }
 
@@ -43,21 +43,21 @@ bool JsonToFacetData(const rapidjson::Value& value, FacetDataPtr* facet_data) {
 }
 
 namespace {
-bool FacetDataToJsonValue(const FacetDataPtr& facet_data,
+bool FacetInfoToJsonValue(const FacetInfoPtr& facet_info,
                           rapidjson::Document::AllocatorType& allocator,
                           rapidjson::Value* value) {
   FTL_DCHECK(value != nullptr);
 
-  if (facet_data->is_string()) {
-    value->SetString(facet_data->get_string().get().c_str(), allocator);
+  if (facet_info->is_string()) {
+    value->SetString(facet_info->get_string().get().c_str(), allocator);
     return true;
   }
 
-  if (facet_data->is_array()) {
+  if (facet_info->is_array()) {
     value->SetArray();
-    for (size_t i = 0; i < facet_data->get_array().size(); ++i) {
+    for (size_t i = 0; i < facet_info->get_array().size(); ++i) {
       rapidjson::Value v;
-      if (!FacetDataToJsonValue(facet_data->get_array()[i], allocator, &v)) {
+      if (!FacetInfoToJsonValue(facet_info->get_array()[i], allocator, &v)) {
         return false;
       }
       value->PushBack(v, allocator);
@@ -65,13 +65,13 @@ bool FacetDataToJsonValue(const FacetDataPtr& facet_data,
     return true;
   }
 
-  if (facet_data->is_object()) {
+  if (facet_info->is_object()) {
     value->SetObject();
-    const auto& facet_object_data = facet_data->get_object();
+    const auto& facet_object_data = facet_info->get_object();
     for (auto it = facet_object_data.cbegin(); it != facet_object_data.cend();
          ++it) {
       rapidjson::Value v;
-      if (!FacetDataToJsonValue(it.GetValue(), allocator, &v)) {
+      if (!FacetInfoToJsonValue(it.GetValue(), allocator, &v)) {
         return false;
       }
       rapidjson::Value key;
@@ -81,20 +81,20 @@ bool FacetDataToJsonValue(const FacetDataPtr& facet_data,
     return true;
   }
 
-  // Failed to convert 'facet_data'.
+  // Failed to convert 'facet_info'.
 
   return false;
 }
 
 }  // namespace
 
-bool FacetDataToJson(const FacetDataPtr& facet_data, rapidjson::Document* doc) {
-  return FacetDataToJsonValue(facet_data, doc->GetAllocator(), doc);
+bool FacetInfoToJson(const FacetInfoPtr& facet_info, rapidjson::Document* doc) {
+  return FacetInfoToJsonValue(facet_info, doc->GetAllocator(), doc);
 }
 
-std::string FacetDataToString(const FacetDataPtr& facet_data) {
+std::string FacetInfoToString(const FacetInfoPtr& facet_info) {
   rapidjson::Document doc;
-  FTL_CHECK(FacetDataToJson(facet_data, &doc));
+  FTL_CHECK(FacetInfoToJson(facet_info, &doc));
 
   rapidjson::StringBuffer buffer;
   rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);

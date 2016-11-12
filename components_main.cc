@@ -39,10 +39,10 @@ class App {
       exit(1);
     }
 
-    fidl::Map<fidl::String, FacetDataPtr> query;
+    fidl::Map<fidl::String, FacetInfoPtr> query;
     for (; argc > 0; --argc, ++argv) {
       std::string facet_type(argv[0]);
-      FacetDataPtr data;
+      FacetInfoPtr data;
       if (argc > 1) {
         rapidjson::Document doc;
         if (doc.Parse(argv[1]).HasParseError()) {
@@ -53,8 +53,8 @@ class App {
         rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
         doc.Accept(writer);
 
-        data = FacetData::New();
-        JsonToFacetData(doc, &data);
+        data = FacetInfo::New();
+        JsonToFacetInfo(doc, &data);
         --argc;
         ++argv;
       }
@@ -70,7 +70,7 @@ class App {
             for (auto f_it = (*it)->facets.begin(); f_it != (*it)->facets.end();
                  ++f_it) {
               std::cout << " - " << f_it.GetKey() << ": "
-                        << FacetDataToString(f_it.GetValue()) << "\n";
+                        << FacetInfoToString(f_it.GetValue()) << "\n";
             }
           }
 
@@ -83,7 +83,7 @@ class App {
   std::unique_ptr<modular::ApplicationContext> context_;
   modular::ApplicationControllerPtr component_manager_controller_;
 
-  fidl::InterfacePtr<ComponentManager> component_manager_;
+  fidl::InterfacePtr<ComponentIndex> component_manager_;
 
   FTL_DISALLOW_COPY_AND_ASSIGN(App);
 };

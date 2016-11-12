@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "apps/component_manager/component_manager_impl.h"
+#include "apps/component_manager/component_index_impl.h"
 
 #include <string>
 #include <iostream>
@@ -54,8 +54,8 @@ class BarrierCallback {
   std::function<void()> callback_;
 };
 
-bool FacetDataMatches(const FacetDataPtr& facet_data,
-                      const FacetDataPtr& filter_data) {
+bool FacetInfoMatches(const FacetInfoPtr& facet_data,
+                      const FacetInfoPtr& filter_data) {
   if (!filter_data) {
     // This was just an existence filter, so return true.
     return true;
@@ -73,7 +73,7 @@ bool FacetDataMatches(const FacetDataPtr& facet_data,
       auto data_it = facet_data->get_object().find(it.GetKey());
       if (data_it == facet_data->get_object().end())
         return false;
-      return FacetDataMatches(data_it.GetValue(), it.GetValue());
+      return FacetInfoMatches(data_it.GetValue(), it.GetValue());
     }
   } else if (facet_data->is_array()) {
     // Every array element in 'filter_data' should match an element
@@ -89,7 +89,7 @@ bool FacetDataMatches(const FacetDataPtr& facet_data,
 }
 
 bool ManifestMatches(const ComponentManifestPtr& manifest,
-                     const fidl::Map<fidl::String, FacetDataPtr>& filter) {
+                     const fidl::Map<fidl::String, FacetInfoPtr>& filter) {
   for (auto it = filter.cbegin(); it != filter.cend(); ++it) {
     // See if the manifest under consideration has this facet.
     const auto& facet_type = it.GetKey();
@@ -97,11 +97,11 @@ bool ManifestMatches(const ComponentManifestPtr& manifest,
       return false;
     }
 
-    // See if the filter's FacetData matches that in the facet.
+    // See if the filter's FacetInfo matches that in the facet.
     const auto& filter_data = it.GetValue();
     const auto& facet_data = manifest->facets[facet_type];
 
-    if (!FacetDataMatches(facet_data, filter_data)) {
+    if (!FacetInfoMatches(facet_data, filter_data)) {
       // Nope.
       return false;
     }
@@ -112,7 +112,7 @@ bool ManifestMatches(const ComponentManifestPtr& manifest,
 
 }  // namespace
 
-ComponentManagerImpl::ComponentManagerImpl() {
+ComponentIndexImpl::ComponentIndexImpl() {
   // Initialize the local index.
   std::string contents;
   FTL_CHECK(files::ReadFileToString(kLocalIndexPath, &contents));
@@ -132,9 +132,9 @@ ComponentManagerImpl::ComponentManagerImpl() {
   }
 }
 
-void ComponentManagerImpl::GetComponentManifest(const fidl::String& component_id,
+void ComponentIndexImpl::GetComponentManifest(const fidl::String& component_id,
                                                 const GetComponentManifestCallback& callback) {
-  FTL_LOG(INFO) << "ComponentManagerImpl::GetComponentManifest(\"" << component_id << "\")";
+  FTL_LOG(INFO) << "ComponentIndexImpl::GetComponentManifest(\"" << component_id << "\")";
 
   network::URLRequestPtr request = network::URLRequest::New();
   request->response_body_mode = network::URLRequest::ResponseBodyMode::BUFFER;
@@ -179,8 +179,8 @@ void ComponentManagerImpl::GetComponentManifest(const fidl::String& component_id
         manifest->id = component_id;
 
         for (auto i = doc.MemberBegin(); i != doc.MemberEnd(); ++i) {
-          auto facet_data = FacetData::New();
-          if (JsonToFacetData(i->value, &facet_data)) {
+          auto facet_data = FacetInfo::New();
+          if (JsonToFacetInfo(i->value, &facet_data)) {
             manifest->facets.insert(i->name.GetString(), std::move(facet_data));
           } else {
             FTL_LOG(ERROR) << "Failed to parse facet " << i->name.GetString();
@@ -191,8 +191,8 @@ void ComponentManagerImpl::GetComponentManifest(const fidl::String& component_id
       });
 }
 
-void ComponentManagerImpl::FindComponentManifests(
-    fidl::Map<fidl::String, FacetDataPtr> facet_values,
+void ComponentIndexImpl::FindComponentManifests(
+    fidl::Map<fidl::String, FacetInfoPtr> filter,
     const FindComponentManifestsCallback& callback) {
   std::vector<ComponentManifestPtr>* results =
       new std::vector<ComponentManifestPtr>();
@@ -206,9 +206,9 @@ void ComponentManagerImpl::FindComponentManifests(
       });
 
   for (const std::string& uri : local_index_) {
-    auto facet_values_copy = facet_values.Clone();
+    auto filter_copy = filter.Clone();
     GetComponentManifest(
-        fidl::String(uri), [ results, barrier, &filter = facet_values_copy ](
+        fidl::String(uri), [ results, barrier, &filter = filter_copy ](
                                ComponentManifestPtr manifest,
                                network::NetworkErrorPtr network_error) mutable {
           // Check if the manifest matches.
