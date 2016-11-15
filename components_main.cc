@@ -21,16 +21,7 @@ namespace component {
 class App {
  public:
   App() : context_(modular::ApplicationContext::CreateFromStartupInfo()) {
-    auto launch_info = modular::ApplicationLaunchInfo::New();
-    launch_info->url = "file:///system/apps/component_manager";
-    modular::ServiceProviderPtr services;
-    launch_info->services = fidl::GetProxy(&services);
-    FTL_CHECK(context_->launcher());
-    context_->launcher()->CreateApplication(
-        std::move(launch_info), GetProxy(&component_manager_controller_));
-
-    modular::ConnectToService(services.get(),
-                              fidl::GetProxy(&component_manager_));
+    component_index_ = context_->ConnectToEnvironmentService<ComponentIndex>();
   }
 
   void Query(int argc, const char** argv) {
@@ -62,7 +53,7 @@ class App {
       query[fidl::String(facet_type)] = std::move(data);
     }
 
-    component_manager_->FindComponentManifests(
+    component_index_->FindComponentManifests(
         std::move(query), [this](fidl::Array<ComponentManifestPtr> results) {
           FTL_LOG(INFO) << "Got " << results.size() << " results...";
           for (auto it = results.begin(); it != results.end(); ++it) {
@@ -81,9 +72,9 @@ class App {
  private:
   std::function<void()> quit_callback_;
   std::unique_ptr<modular::ApplicationContext> context_;
-  modular::ApplicationControllerPtr component_manager_controller_;
+  modular::ApplicationControllerPtr component_index_controller_;
 
-  fidl::InterfacePtr<ComponentIndex> component_manager_;
+  fidl::InterfacePtr<ComponentIndex> component_index_;
 
   FTL_DISALLOW_COPY_AND_ASSIGN(App);
 };
