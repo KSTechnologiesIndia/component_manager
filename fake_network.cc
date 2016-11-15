@@ -15,8 +15,8 @@
 #include "lib/ftl/files/file.h"
 #include "lib/ftl/files/path.h"
 #include "lib/ftl/logging.h"
-#include "lib/mtl/vmo/strings.h"
 #include "lib/mtl/threading/create_thread.h"
+#include "lib/mtl/vmo/strings.h"
 #include "mx/vmo.h"
 
 namespace component {
@@ -24,11 +24,6 @@ namespace component {
 namespace {
 
 constexpr char kBasePath[] = "/system/components/";
-
-std::string PathForUrl(const std::string& url) {
-  std::regex re("[:/]+");
-  return files::SimplifyPath(kBasePath + std::regex_replace(url, re, "/"));
-}
 
 }  // namespace
 
@@ -55,7 +50,7 @@ class FakeURLLoader : public network::URLLoader {
 
     std::string contents;
     mx::vmo shared_buffer;
-    auto path = PathForUrl(request->url);
+    auto path = FakeNetwork::PathForUrl(request->url);
     if (!files::ReadFileToString(path, &contents) ||
         !mtl::VmoFromString(contents, &shared_buffer)) {
       response->status_code = 404;
@@ -80,8 +75,11 @@ class FakeURLLoader : public network::URLLoader {
   ftl::RefPtr<ftl::TaskRunner> task_runner_;
 };
 
-FakeNetwork::FakeNetwork() {
-  thread_ = mtl::CreateThread(&task_runner_);
+FakeNetwork::FakeNetwork() { thread_ = mtl::CreateThread(&task_runner_); }
+
+std::string FakeNetwork::PathForUrl(const std::string& url) {
+  std::regex re("[:/]+");
+  return files::SimplifyPath(kBasePath + std::regex_replace(url, re, "/"));
 }
 
 std::shared_ptr<network::URLLoader> FakeNetwork::MakeURLLoader() {

@@ -5,10 +5,10 @@
 #include "apps/component_manager/component_index_impl.h"
 #include "apps/component_manager/services/component.fidl.h"
 #include "apps/modular/lib/app/application_context.h"
+#include "lib/fidl/cpp/bindings/binding_set.h"
 #include "lib/ftl/logging.h"
 #include "lib/ftl/macros.h"
 #include "lib/mtl/tasks/message_loop.h"
-#include "lib/fidl/cpp/bindings/binding_set.h"
 
 namespace component {
 

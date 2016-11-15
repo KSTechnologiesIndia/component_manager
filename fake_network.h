@@ -21,6 +21,7 @@ namespace component {
 class FakeNetwork {
  public:
   FakeNetwork();
+  static std::string PathForUrl(const std::string& url);
   std::shared_ptr<network::URLLoader> MakeURLLoader();
 
  private:

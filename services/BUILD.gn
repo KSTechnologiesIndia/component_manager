@@ -14,14 +14,3 @@ fidl("services") {
   ]
 }
 
-source_set("format") {
-  sources = [
-    "format.h",
-    "format.cc",
-  ]
-
-  deps = [
-    ":services",
-    "//third_party/rapidjson",
-  ]
-}

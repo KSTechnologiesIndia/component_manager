@@ -7,23 +7,55 @@ module component;
 import "apps/modular/services/application/service_provider.fidl";
 import "apps/network/services/network_error.fidl";
 
-// This represents a node in the JSON structure associated with a facet in a component manifest.
-union FacetInfo {
-  // TODO(ianloic): support more JSON data types.
-  string string;
-  map<string, FacetInfo> object;
-  array<FacetInfo> array;
+// Represents the contents of the fuchsia:component facet.
+struct ComponentFacet {
+  string url;
+  string? name;
+  string? version;
+  string? other_versions;
+};
+
+// Represents the contents of the fuchsia:resources facet, resolved to this machine.
+struct ResourcesFacet {
+  map<string, string> resource_urls;
+};
+
+// Represents the contents of the fuchsia:application facet.
+struct ApplicationFacet {
+  string resource;
+  array<string>? arguments;
+  string? runner;
+  string? name;
 };
 
 struct ComponentManifest {
-  string id;
-  map<string, FacetInfo> facets;
+  // The JSON source for the manifest.
+  string raw;
+  // The standard fuchsia:component facet.
+  ComponentFacet component;
+  // The standard fuchsia:resources facet.
+  ResourcesFacet? resources;
+  // The standard fuchsia:application facet.
+  ApplicationFacet? application;
+};
+
+interface ComponentResources {
+  GetResourceNames() => (array<string> resource_names);
+  GetResourceURLs() => (map<string, string> resource_urls);
+  GetResource(string resource_name) => (handle<vmo>? data);
+  // TODO(ianloic): this should go away.
+  GetResourcePath(string resource_name) => (string local_path);
 };
 
 // Exposed by the component_manager.
 [ServiceName="component::ComponentIndex"]
 interface ComponentIndex {
-  GetComponentManifest(string component_id)
+  // Gets a component's manifest by |component_id|.
+  // If |component_resources| is supplied a ComponentResources interface will
+  // be provided that can be used to retrieve the resources for the component.
+  // When the |component_resources| channel is closed the component manager
+  // will consider the resources as unused and may flush them from its cache.
+  GetComponent(string component_id, ComponentResources&? component_resources)
       => (ComponentManifest? component_manifest, network.NetworkError? error);
 
   // Searches all Components known by the ComponentManager for those matching
@@ -34,6 +66,6 @@ interface ComponentIndex {
   //
   // TODO(thatguy): |filter| should become a more descriptive query
   // representation when more than property equality is needed.
-  FindComponentManifests(map<string, FacetInfo?> filter)
+  FindComponentManifests(map<string, string> filter)
       => (array<ComponentManifest> results);
 };

@@ -20,11 +20,11 @@ class RequestComponentApp {
       : context_(modular::ApplicationContext::CreateFromStartupInfo()) {
     component_index_ =
         context_->ConnectToEnvironmentService<component::ComponentIndex>();
-    component_index_->GetComponentManifest(
-        "fuchsia:hello_component",
+    component_index_->GetComponent(
+        "fuchsia:hello_component", nullptr /* component_resources */,
         [this](component::ComponentManifestPtr manifest,
                network::NetworkErrorPtr error) {
-          FTL_LOG(INFO) << "GetComponentManifeset returned.";
+          FTL_LOG(INFO) << "GetComponent returned.";
         });
   }
 

@@ -9,17 +9,19 @@ executable("component_manager_main") {
     "component_index_impl.cc",
     "component_index_impl.h",
     "component_manager_main.cc",
+    "component_resources_impl.cc",
+    "component_resources_impl.h",
     "fake_network.cc",
     "fake_network.h",
   ]
 
   deps = [
     "//apps/component_manager/services",
-    "//apps/component_manager/services:format",
     "//apps/modular/lib/app",
     "//apps/network/services",
     "//lib/ftl",
     "//lib/mtl",
+    "//lib/url",
     "//third_party/rapidjson",
   ]
 
@@ -33,10 +35,10 @@ executable("components_main") {
 
   deps = [
     "//apps/component_manager/services",
-    "//apps/component_manager/services:format",
     "//apps/modular/lib/app",
     "//lib/ftl",
     "//lib/mtl",
+    "//third_party/rapidjson",
   ]
 }
 

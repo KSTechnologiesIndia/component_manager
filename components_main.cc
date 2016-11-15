@@ -5,16 +5,16 @@
 #include <iostream>
 
 #include "apps/component_manager/services/component.fidl.h"
-#include "apps/component_manager/services/format.h"
-#include "apps/modular/lib/app/connect.h"
 #include "apps/modular/lib/app/application_context.h"
+#include "apps/modular/lib/app/connect.h"
 #include "apps/modular/services/application/service_provider.fidl.h"
+#include "lib/fidl/cpp/bindings/binding_set.h"
 #include "lib/fidl/cpp/bindings/interface_ptr.h"
 #include "lib/fidl/cpp/bindings/interface_request.h"
 #include "lib/ftl/logging.h"
 #include "lib/ftl/macros.h"
 #include "lib/mtl/tasks/message_loop.h"
-#include "lib/fidl/cpp/bindings/binding_set.h"
+#include "third_party/rapidjson/rapidjson/document.h"
 
 namespace component {
 
@@ -30,39 +30,30 @@ class App {
       exit(1);
     }
 
-    fidl::Map<fidl::String, FacetInfoPtr> query;
+    fidl::Map<fidl::String, fidl::String> query;
     for (; argc > 0; --argc, ++argv) {
       std::string facet_type(argv[0]);
-      FacetInfoPtr data;
       if (argc > 1) {
+        // Check JSON validity.
         rapidjson::Document doc;
         if (doc.Parse(argv[1]).HasParseError()) {
           FTL_LOG(FATAL) << "Failed to parse JSON facet data: " << argv[1];
         }
 
-        rapidjson::StringBuffer buffer;
-        rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
-        doc.Accept(writer);
-
-        data = FacetInfo::New();
-        JsonToFacetInfo(doc, &data);
+        query[fidl::String(facet_type)] = argv[1];
         --argc;
         ++argv;
+      } else {
+        query[fidl::String(facet_type)] = "";
       }
-
-      query[fidl::String(facet_type)] = std::move(data);
     }
 
     component_index_->FindComponentManifests(
         std::move(query), [this](fidl::Array<ComponentManifestPtr> results) {
           FTL_LOG(INFO) << "Got " << results.size() << " results...";
           for (auto it = results.begin(); it != results.end(); ++it) {
-            std::cout << "=== " << (*it)->id << "\n";
-            for (auto f_it = (*it)->facets.begin(); f_it != (*it)->facets.end();
-                 ++f_it) {
-              std::cout << " - " << f_it.GetKey() << ": "
-                        << FacetInfoToString(f_it.GetValue()) << "\n";
-            }
+            std::cout << "=== " << (*it)->component->url << "\n";
+            std::cout << (*it)->raw << "\n";
           }
 
           exit(0);
@@ -82,13 +73,14 @@ class App {
 }  // namespace component
 
 void Usage(const char* argv0) {
-  std::cerr << "Usage: " << argv0 << " <command>\n\n"
-     << "commands:\n"
-     << "  query [facet1 [info1], ...]]\n"
-     << "    Queries for existence of all 'facetN' and optionally matches\n"
-     << "    'infoN' against that facet's info. 'infoN' will match if it\n"
-     << "    is a subset of 'facetN's info. 'infoN' should be provided\n"
-     << "    as JSON.\n";
+  std::cerr
+      << "Usage: " << argv0 << " <command>\n\n"
+      << "commands:\n"
+      << "  query [facet1 [info1], ...]]\n"
+      << "    Queries for existence of all 'facetN' and optionally matches\n"
+      << "    'infoN' against that facet's info. 'infoN' will match if it\n"
+      << "    is a subset of 'facetN's info. 'infoN' should be provided\n"
+      << "    as JSON.\n";
 
   exit(1);
 }
