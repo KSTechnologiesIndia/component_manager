@@ -16,12 +16,12 @@ namespace {
 
 class RequestComponentApp {
  public:
-  RequestComponentApp()
+  RequestComponentApp(const std::string& component_id)
       : context_(modular::ApplicationContext::CreateFromStartupInfo()) {
     component_index_ =
         context_->ConnectToEnvironmentService<component::ComponentIndex>();
     component_index_->GetComponent(
-        "fuchsia:hello_component", nullptr /* component_resources */,
+        component_id, nullptr /* component_resources */,
         [this](component::ComponentManifestPtr manifest,
                network::NetworkErrorPtr error) {
           FTL_LOG(INFO) << "GetComponent returned.";
@@ -39,7 +39,8 @@ class RequestComponentApp {
 
 int main(int argc, const char** argv) {
   mtl::MessageLoop loop;
-  RequestComponentApp app;
+  FTL_CHECK(argc == 2);
+  RequestComponentApp app(argv[1]);
   loop.Run();
   return 0;
 }

@@ -5,8 +5,8 @@
 #ifndef APPS_COMPONENT_INDEX_IMPL_H_
 #define APPS_COMPONENT_INDEX_IMPL_H_
 
-#include "apps/component_manager/fake_network.h"
 #include "apps/component_manager/services/component.fidl.h"
+#include "apps/network/services/network_service.fidl.h"
 #include "apps/network/services/url_loader.fidl.h"
 #include "lib/ftl/macros.h"
 #include "third_party/rapidjson/rapidjson/document.h"
@@ -15,7 +15,7 @@ namespace component {
 
 class ComponentIndexImpl : public component::ComponentIndex {
  public:
-  ComponentIndexImpl();
+  ComponentIndexImpl(network::NetworkServicePtr network_service);
 
   void GetComponent(
       const ::fidl::String& component_id,
@@ -27,12 +27,7 @@ class ComponentIndexImpl : public component::ComponentIndex {
       const FindComponentManifestsCallback& callback) override;
 
  private:
-  ComponentFacetPtr MakeComponentFacet(const rapidjson::Document& json);
-  ResourcesFacetPtr MakeResourcesFacet(const rapidjson::Document& json,
-                                       const std::string& base_url);
-  ApplicationFacetPtr MakeApplicationFacet(const rapidjson::Document& json);
-
-  FakeNetwork fake_network_;
+  network::NetworkServicePtr network_service_;
 
   // A list of component URIs that are installed locally.
   std::vector<std::string> local_index_;

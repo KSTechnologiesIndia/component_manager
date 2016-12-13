@@ -43,8 +43,6 @@ interface ComponentResources {
   GetResourceNames() => (array<string> resource_names);
   GetResourceURLs() => (map<string, string> resource_urls);
   GetResource(string resource_name) => (handle<vmo>? data);
-  // TODO(ianloic): this should go away.
-  GetResourcePath(string resource_name) => (string local_path);
 };
 
 // Exposed by the component_manager.

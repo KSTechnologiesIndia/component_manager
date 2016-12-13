@@ -20,8 +20,6 @@ class ComponentResourcesImpl : public ComponentResources {
   void GetResourceURLs(const GetResourceURLsCallback& callback) override;
   void GetResource(const fidl::String& resource_name,
                    const GetResourceCallback& callback) override;
-  void GetResourcePath(const fidl::String& resource_name,
-                       const GetResourcePathCallback& callback) override;
 
  private:
   fidl::Binding<ComponentResources> binding_;

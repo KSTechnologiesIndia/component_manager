@@ -14,7 +14,10 @@ namespace component {
 
 class App {
  public:
-  App() : context_(modular::ApplicationContext::CreateFromStartupInfo()) {
+  App()
+      : context_(modular::ApplicationContext::CreateFromStartupInfo()),
+        impl_(
+            context_->ConnectToEnvironmentService<network::NetworkService>()) {
     context_->outgoing_services()->AddService<ComponentIndex>(
         [this](fidl::InterfaceRequest<ComponentIndex> request) {
           bindings_.AddBinding(&impl_, std::move(request));
@@ -22,9 +25,9 @@ class App {
   }
 
  private:
+  std::unique_ptr<modular::ApplicationContext> context_;
   ComponentIndexImpl impl_;
   fidl::BindingSet<ComponentIndex> bindings_;
-  std::unique_ptr<modular::ApplicationContext> context_;
 
   FTL_DISALLOW_COPY_AND_ASSIGN(App);
 };

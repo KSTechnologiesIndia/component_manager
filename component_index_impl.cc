@@ -7,12 +7,13 @@
 #include <iostream>
 #include <string>
 
+#include "apps/component_manager/cache.h"
 #include "apps/component_manager/component_resources_impl.h"
-#include "apps/component_manager/fake_network.h"
 #include "apps/component_manager/services/component.fidl.h"
 #include "lib/ftl/files/file.h"
 #include "lib/ftl/functional/make_copyable.h"
 #include "lib/ftl/logging.h"
+#include "lib/mtl/socket/strings.h"
 #include "lib/mtl/vmo/strings.h"
 #include "lib/url/gurl.h"
 #include "third_party/rapidjson/rapidjson/document.h"
@@ -136,9 +137,86 @@ bool ManifestMatches(const ComponentManifestPtr& manifest,
   return true;
 }
 
+ComponentFacetPtr MakeComponentFacet(const rapidjson::Document& doc) {
+  const auto& json = doc[kComponentFacet];
+  auto fidl = ComponentFacet::New();
+  CopyJSONFieldToFidl(json, "url", &fidl->url);
+  CopyJSONFieldToFidl(json, "name", &fidl->name);
+  CopyJSONFieldToFidl(json, "version", &fidl->version);
+  CopyJSONFieldToFidl(json, "other_versions", &fidl->other_versions);
+  return fidl;
+}
+
+ResourcesFacetPtr MakeResourcesFacet(const rapidjson::Document& doc,
+                                     const std::string& base_url) {
+  url::GURL component_url(base_url);
+
+  const auto& json = doc[kResourcesFacet];
+  auto fidl = ResourcesFacet::New();
+  for (auto i = json.MemberBegin(); i != json.MemberEnd(); ++i) {
+    // TODO(ianloic): support more advanced resources facets.
+    const std::string& relative_url = i->value.GetString();
+    std::string absolute_url = component_url.Resolve(relative_url).spec();
+    fidl->resource_urls.insert(i->name.GetString(), absolute_url);
+  }
+  return fidl;
+}
+
+ApplicationFacetPtr MakeApplicationFacet(const rapidjson::Document& doc) {
+  const auto& json = doc[kApplicationFacet];
+  auto fidl = ApplicationFacet::New();
+  // TODO(ianloic): support arguments.
+  CopyJSONFieldToFidl(json, "resource", &fidl->resource);
+  CopyJSONFieldToFidl(json, "runner", &fidl->runner);
+  CopyJSONFieldToFidl(json, "name", &fidl->name);
+  return fidl;
+}
+
+std::pair<ComponentManifestPtr, network::NetworkErrorPtr> ParseManifest(
+    const std::string& component_id, const std::string& contents) {
+  rapidjson::Document doc;
+  if (doc.Parse(contents.c_str()).HasParseError()) {
+    FTL_LOG(ERROR) << "Failed to parse component manifest at: " << component_id;
+    return std::make_pair(
+        nullptr, MakeNetworkError(0, "Failed to parse component manifest."));
+  }
+
+  if (!doc.IsObject()) {
+    FTL_LOG(ERROR) << "Component manifest " << component_id
+                   << " is not a JSON object";
+    return std::make_pair(
+        nullptr,
+        MakeNetworkError(0, "Component manifest is not a JSON object"));
+  }
+
+  if (!doc.HasMember(kComponentFacet)) {
+    FTL_LOG(ERROR) << "Component " << component_id
+                   << " doesn't have a component facet";
+    return std::make_pair(
+        nullptr,
+        MakeNetworkError(0, "Component manifest missing component facet"));
+  }
+
+  auto manifest = ComponentManifest::New();
+  manifest->raw = contents;
+  manifest->component = MakeComponentFacet(doc);
+
+  if (doc.HasMember(kResourcesFacet)) {
+    manifest->resources = MakeResourcesFacet(doc, manifest->component->url);
+  }
+
+  if (doc.HasMember(kApplicationFacet)) {
+    manifest->application = MakeApplicationFacet(doc);
+  }
+
+  return std::make_pair(std::move(manifest), nullptr);
+}
+
 }  // namespace
 
-ComponentIndexImpl::ComponentIndexImpl() {
+ComponentIndexImpl::ComponentIndexImpl(
+    network::NetworkServicePtr network_service)
+    : network_service_(std::move(network_service)) {
   // Initialize the local index.
   std::string contents;
   FTL_CHECK(files::ReadFileToString(kLocalIndexPath, &contents));
@@ -169,13 +247,38 @@ void ComponentIndexImpl::GetComponent(
   request->response_body_mode = network::URLRequest::ResponseBodyMode::BUFFER;
   request->url = component_id;
 
-  auto url_loader = fake_network_.MakeURLLoader();
+  std::string cache_contents;
+  if (cache::Load(component_id, &cache_contents)) {
+    // Loaded from the disk cache.
+    FTL_LOG(INFO) << "Loaded " << component_id << " from the cache";
+    ComponentManifestPtr manifest;
+    network::NetworkErrorPtr error;
+
+    std::tie(manifest, error) = ParseManifest(component_id, cache_contents);
+
+    if (error) {
+      callback(nullptr, std::move(error));
+      return;
+    }
+
+    if (manifest && manifest->resources && component_resources) {
+      new ComponentResourcesImpl(std::move(component_resources),
+                                 manifest->resources->resource_urls.Clone());
+    }
+
+    callback(std::move(manifest), nullptr);
+    return;
+  }
+
+  // Load from the network.
+  network::URLLoaderPtr url_loader;
+  network_service_->CreateURLLoader(GetProxy(&url_loader));
 
   url_loader->Start(
       std::move(request), ftl::MakeCopyable([
         this, component_id,
         component_resources = std::move(component_resources), callback,
-        url_loader
+        url_loader = std::move(url_loader)
       ](network::URLResponsePtr response) mutable {
         FTL_LOG(INFO) << "URL Loader Start Callback";
         if (response->error) {
@@ -188,99 +291,43 @@ void ComponentIndexImpl::GetComponent(
         // TODO(ianloic): impose some limits on manifest size to prevent DoS.
 
         std::string contents;
-        FTL_DCHECK(response->body->is_buffer());
 
-        if (!mtl::StringFromVmo(std::move(response->body->get_buffer()),
-                                &contents)) {
-          FTL_LOG(ERROR) << "Failed to read URL response.";
-          callback(nullptr,
-                   MakeNetworkError(0, "Failed to read URL response."));
-          return;
-        }
-
-        rapidjson::Document doc;
-        if (doc.Parse(contents.c_str()).HasParseError()) {
-          FTL_LOG(ERROR) << "Failed to parse component manifest at: "
-                         << component_id;
-          callback(nullptr,
-                   MakeNetworkError(0, "Failed to parse component manifest."));
-          return;
-        }
-
-        if (!doc.IsObject()) {
-          FTL_LOG(ERROR) << "Component manifest " << component_id
-                         << " is not a JSON object";
-          callback(nullptr, MakeNetworkError(
-                                0, "Component manifest is not a JSON object"));
-          return;
-        }
-
-        if (!doc.HasMember(kComponentFacet)) {
-          FTL_LOG(ERROR) << "Component " << component_id
-                         << " doesn't have a component facet";
-          callback(nullptr,
-                   MakeNetworkError(
-                       0, "Component manifest missing component facet"));
-          return;
-        }
-
-        auto manifest = ComponentManifest::New();
-        manifest->raw = contents;
-        manifest->component = MakeComponentFacet(doc);
-
-        if (doc.HasMember(kResourcesFacet)) {
-          manifest->resources =
-              MakeResourcesFacet(doc, manifest->component->url);
-          if (component_resources) {
-            new ComponentResourcesImpl(
-                std::move(component_resources),
-                manifest->resources->resource_urls.Clone());
+        if (response->body->is_buffer()) {
+          if (!mtl::StringFromVmo(std::move(response->body->get_buffer()),
+                                  &contents)) {
+            FTL_LOG(ERROR) << "Failed to read URL response buffer.";
+            callback(nullptr, MakeNetworkError(
+                                  0, "Failed to read URL response buffer."));
+            return;
+          }
+        } else {
+          if (!mtl::BlockingCopyToString(
+                  std::move(response->body->get_stream()), &contents)) {
+            FTL_LOG(ERROR) << "Failed to read URL response stream.";
+            callback(nullptr, MakeNetworkError(
+                                  0, "Failed to read URL response stream."));
+            return;
           }
         }
 
-        if (doc.HasMember(kApplicationFacet)) {
-          manifest->application = MakeApplicationFacet(doc);
+        ComponentManifestPtr manifest;
+        network::NetworkErrorPtr error;
+
+        std::tie(manifest, error) = ParseManifest(component_id, contents);
+
+        if (error) {
+          callback(nullptr, std::move(error));
+          return;
+        }
+
+        if (manifest && manifest->resources && component_resources) {
+          new ComponentResourcesImpl(
+              std::move(component_resources),
+              manifest->resources->resource_urls.Clone());
         }
 
         callback(std::move(manifest), nullptr);
       }));
-}
-
-ComponentFacetPtr ComponentIndexImpl::MakeComponentFacet(
-    const rapidjson::Document& doc) {
-  const auto& json = doc[kComponentFacet];
-  auto fidl = ComponentFacet::New();
-  CopyJSONFieldToFidl(json, "url", &fidl->url);
-  CopyJSONFieldToFidl(json, "name", &fidl->name);
-  CopyJSONFieldToFidl(json, "version", &fidl->version);
-  CopyJSONFieldToFidl(json, "other_versions", &fidl->other_versions);
-  return fidl;
-}
-
-ResourcesFacetPtr ComponentIndexImpl::MakeResourcesFacet(
-    const rapidjson::Document& doc, const std::string& base_url) {
-  url::GURL component_url(base_url);
-
-  const auto& json = doc[kResourcesFacet];
-  auto fidl = ResourcesFacet::New();
-  for (auto i = json.MemberBegin(); i != json.MemberEnd(); ++i) {
-    // TODO(ianloic): support more advanced resources facets.
-    const std::string& relative_url = i->value.GetString();
-    std::string absolute_url = component_url.Resolve(relative_url).spec();
-    fidl->resource_urls.insert(i->name.GetString(), absolute_url);
-  }
-  return fidl;
-}
-
-ApplicationFacetPtr ComponentIndexImpl::MakeApplicationFacet(
-    const rapidjson::Document& doc) {
-  const auto& json = doc[kApplicationFacet];
-  auto fidl = ApplicationFacet::New();
-  // TODO(ianloic): support arguments.
-  CopyJSONFieldToFidl(json, "resource", &fidl->resource);
-  CopyJSONFieldToFidl(json, "runner", &fidl->runner);
-  CopyJSONFieldToFidl(json, "name", &fidl->name);
-  return fidl;
 }
 
 void ComponentIndexImpl::FindComponentManifests(
