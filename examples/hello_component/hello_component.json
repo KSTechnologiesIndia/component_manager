@@ -9,5 +9,8 @@
   "fuchsia:resources": {
     "main": "hello_component",
     "hello": "hello.txt"
+  },
+  "fuchsia:module": {
+    "contract": "https://fuchsia-contracts.google.com/hello_contract"
   }
 }
