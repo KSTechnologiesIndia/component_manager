@@ -7,6 +7,7 @@
 #include "apps/modular/lib/app/application_context.h"
 #include "lib/ftl/logging.h"
 #include "lib/ftl/macros.h"
+#include "lib/mtl/tasks/message_loop.h"
 
 namespace {
 
@@ -26,6 +27,8 @@ class HelloComponentApp {
 
 int main(int argc, const char** argv) {
   FTL_LOG(INFO) << "hello_component main";
+  mtl::MessageLoop loop;
   HelloComponentApp hello_component_app;
+  loop.Run();
   return 0;
 }

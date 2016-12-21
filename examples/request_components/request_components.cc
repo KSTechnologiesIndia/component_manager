@@ -21,8 +21,9 @@ class RequestComponentApp {
     component_index_ =
         context_->ConnectToEnvironmentService<component::ComponentIndex>();
     component_index_->GetComponent(
-        component_id, nullptr /* component_resources */,
+        component_id,
         [this](component::ComponentManifestPtr manifest,
+               fidl::InterfaceHandle<component::ComponentResources> resources,
                network::NetworkErrorPtr error) {
           FTL_LOG(INFO) << "GetComponent returned.";
         });

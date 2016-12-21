@@ -4,6 +4,10 @@
 
 #include "apps/component_manager/component_resources_impl.h"
 
+#include "lib/ftl/functional/make_copyable.h"
+#include "lib/mtl/socket/strings.h"
+#include "lib/mtl/vmo/strings.h"
+
 namespace component {
 
 void ComponentResourcesImpl::GetResourceNames(
@@ -21,8 +25,25 @@ void ComponentResourcesImpl::GetResourceURLs(
 }
 
 void ComponentResourcesImpl::GetResource(const fidl::String& resource_name,
-                                         const GetResourceCallback& callback) {
-  FTL_LOG(FATAL) << "NOT IMPLEMENTED";
+                                         const GetResourceCallback& callback_) {
+  GetResourceCallback callback(callback_);
+
+  auto i = resource_urls_.find(resource_name);
+  if (i == resource_urls_.end()) {
+    FTL_LOG(ERROR) << "Requested invalid resource " << resource_name;
+    auto error = network::NetworkError::New();
+    error->code = 404;
+    error->description = "Not Found";
+    callback(mx::vmo(), std::move(error));
+    return;
+  }
+  const std::string& url = i.GetValue();
+
+  resource_loader_->LoadResource(
+      url, [callback](mx::vmo vmo, network::NetworkErrorPtr error) {
+        // TODO(ianloic): can the callback be called directly?
+        callback(std::move(vmo), std::move(error));
+      });
 }
 
 }  // namespace component

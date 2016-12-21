@@ -5,25 +5,27 @@
 #ifndef APPS_COMPONENT_RESOURCES_IMPL_H_
 #define APPS_COMPONENT_RESOURCES_IMPL_H_
 
+#include "apps/component_manager/resource_loader.h"
 #include "apps/component_manager/services/component.fidl.h"
+#include "apps/network/services/network_service.fidl.h"
 #include "lib/fidl/cpp/bindings/binding.h"
 
 namespace component {
 
 class ComponentResourcesImpl : public ComponentResources {
  public:
-  ComponentResourcesImpl(fidl::InterfaceRequest<ComponentResources> request,
-                         fidl::Map<fidl::String, fidl::String> resource_urls)
-      : binding_(this, std::move(request)),
-        resource_urls_(std::move(resource_urls)) {}
+  ComponentResourcesImpl(fidl::Map<fidl::String, fidl::String> resource_urls,
+                         std::shared_ptr<ResourceLoader> resource_loader)
+      : resource_urls_(std::move(resource_urls)),
+        resource_loader_(resource_loader) {}
   void GetResourceNames(const GetResourceNamesCallback& callback) override;
   void GetResourceURLs(const GetResourceURLsCallback& callback) override;
   void GetResource(const fidl::String& resource_name,
                    const GetResourceCallback& callback) override;
 
  private:
-  fidl::Binding<ComponentResources> binding_;
   fidl::Map<fidl::String, fidl::String> resource_urls_;
+  std::shared_ptr<ResourceLoader> resource_loader_;
 };
 
 }  // namespace component

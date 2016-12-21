@@ -5,11 +5,12 @@
 #ifndef APPS_COMPONENT_INDEX_IMPL_H_
 #define APPS_COMPONENT_INDEX_IMPL_H_
 
+#include "apps/component_manager/component_resources_impl.h"
+#include "apps/component_manager/resource_loader.h"
 #include "apps/component_manager/services/component.fidl.h"
 #include "apps/network/services/network_service.fidl.h"
-#include "apps/network/services/url_loader.fidl.h"
+#include "lib/fidl/cpp/bindings/binding_set.h"
 #include "lib/ftl/macros.h"
-#include "third_party/rapidjson/rapidjson/document.h"
 
 namespace component {
 
@@ -17,20 +18,21 @@ class ComponentIndexImpl : public component::ComponentIndex {
  public:
   ComponentIndexImpl(network::NetworkServicePtr network_service);
 
-  void GetComponent(
-      const ::fidl::String& component_id,
-      ::fidl::InterfaceRequest<ComponentResources> component_resources,
-      const GetComponentCallback& callback) override;
+  void GetComponent(const fidl::String& component_id,
+                    const GetComponentCallback& callback) override;
 
   void FindComponentManifests(
       fidl::Map<fidl::String, fidl::String> filter,
       const FindComponentManifestsCallback& callback) override;
 
  private:
-  network::NetworkServicePtr network_service_;
+  std::shared_ptr<ResourceLoader> resource_loader_;
 
   // A list of component URIs that are installed locally.
   std::vector<std::string> local_index_;
+
+  fidl::BindingSet<ComponentResources, std::unique_ptr<ComponentResourcesImpl>>
+      resources_bindings_;
 
   FTL_DISALLOW_COPY_AND_ASSIGN(ComponentIndexImpl);
 };

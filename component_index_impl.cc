@@ -7,8 +7,8 @@
 #include <iostream>
 #include <string>
 
-#include "apps/component_manager/cache.h"
 #include "apps/component_manager/component_resources_impl.h"
+#include "apps/component_manager/make_network_error.h"
 #include "apps/component_manager/services/component.fidl.h"
 #include "lib/ftl/files/file.h"
 #include "lib/ftl/functional/make_copyable.h"
@@ -31,14 +31,6 @@ constexpr char kApplicationFacet[] = "fuchsia:program";
 constexpr char kLocalIndexPath[] = "/system/components/index.json";
 
 namespace {
-
-network::NetworkErrorPtr MakeNetworkError(int code,
-                                          const std::string& description) {
-  auto error = network::NetworkError::New();
-  error->code = code;
-  error->description = description;
-  return error;
-}
 
 void CopyJSONFieldToFidl(const rapidjson::Value& object, const char* key,
                          fidl::String* string) {
@@ -216,7 +208,8 @@ std::pair<ComponentManifestPtr, network::NetworkErrorPtr> ParseManifest(
 
 ComponentIndexImpl::ComponentIndexImpl(
     network::NetworkServicePtr network_service)
-    : network_service_(std::move(network_service)) {
+    : resource_loader_(
+          std::make_shared<ResourceLoader>(std::move(network_service))) {
   // Initialize the local index.
   std::string contents;
   FTL_CHECK(files::ReadFileToString(kLocalIndexPath, &contents));
@@ -236,98 +229,45 @@ ComponentIndexImpl::ComponentIndexImpl(
   }
 }
 
-void ComponentIndexImpl::GetComponent(
-    const ::fidl::String& component_id,
-    ::fidl::InterfaceRequest<ComponentResources> component_resources,
-    const GetComponentCallback& callback) {
+void ComponentIndexImpl::GetComponent(const ::fidl::String& component_id_,
+                                      const GetComponentCallback& callback_) {
+  std::string component_id(component_id_);
+  GetComponentCallback callback(callback_);
+
   FTL_LOG(INFO) << "ComponentIndexImpl::GetComponent(\"" << component_id
                 << "\")";
 
-  network::URLRequestPtr request = network::URLRequest::New();
-  request->response_body_mode = network::URLRequest::ResponseBodyMode::BUFFER;
-  request->url = component_id;
-
-  std::string cache_contents;
-  if (cache::Load(component_id, &cache_contents)) {
-    // Loaded from the disk cache.
-    FTL_LOG(INFO) << "Loaded " << component_id << " from the cache";
-    ComponentManifestPtr manifest;
-    network::NetworkErrorPtr error;
-
-    std::tie(manifest, error) = ParseManifest(component_id, cache_contents);
-
-    if (error) {
-      callback(nullptr, std::move(error));
-      return;
-    }
-
-    if (manifest && manifest->resources && component_resources) {
-      new ComponentResourcesImpl(std::move(component_resources),
-                                 manifest->resources->resource_urls.Clone());
-    }
-
-    callback(std::move(manifest), nullptr);
-    return;
-  }
-
-  // Load from the network.
-  network::URLLoaderPtr url_loader;
-  network_service_->CreateURLLoader(GetProxy(&url_loader));
-
-  url_loader->Start(
-      std::move(request), ftl::MakeCopyable([
-        this, component_id,
-        component_resources = std::move(component_resources), callback,
-        url_loader = std::move(url_loader)
-      ](network::URLResponsePtr response) mutable {
-        FTL_LOG(INFO) << "URL Loader Start Callback";
-        if (response->error) {
-          FTL_LOG(ERROR) << "URL response contained error: "
-                         << response->error->description;
-          callback(nullptr, std::move(response->error));
+  resource_loader_->LoadResource(
+      component_id, [this, component_id, callback](
+                        mx::vmo vmo, network::NetworkErrorPtr error) {
+        // Pass errors to the caller.
+        if (error) {
+          callback(nullptr, nullptr, std::move(error));
           return;
         }
 
-        // TODO(ianloic): impose some limits on manifest size to prevent DoS.
-
-        std::string contents;
-
-        if (response->body->is_buffer()) {
-          if (!mtl::StringFromVmo(std::move(response->body->get_buffer()),
-                                  &contents)) {
-            FTL_LOG(ERROR) << "Failed to read URL response buffer.";
-            callback(nullptr, MakeNetworkError(
-                                  0, "Failed to read URL response buffer."));
-            return;
-          }
-        } else {
-          if (!mtl::BlockingCopyToString(
-                  std::move(response->body->get_stream()), &contents)) {
-            FTL_LOG(ERROR) << "Failed to read URL response stream.";
-            callback(nullptr, MakeNetworkError(
-                                  0, "Failed to read URL response stream."));
-            return;
-          }
+        std::string manifest_string;
+        if (!mtl::StringFromVmo(std::move(vmo), &manifest_string)) {
+          FTL_LOG(ERROR) << "Failed to make string from manifest vmo";
+          callback(nullptr, nullptr,
+                   MakeNetworkError(500, "Failed to make string from vmo"));
+          return;
         }
 
         ComponentManifestPtr manifest;
-        network::NetworkErrorPtr error;
+        std::tie(manifest, error) =
+            ParseManifest(component_id, manifest_string);
 
-        std::tie(manifest, error) = ParseManifest(component_id, contents);
-
-        if (error) {
-          callback(nullptr, std::move(error));
-          return;
+        if (manifest && manifest->resources) {
+          std::unique_ptr<ComponentResourcesImpl> impl =
+              std::make_unique<ComponentResourcesImpl>(
+                  manifest->resources->resource_urls.Clone(), resource_loader_);
+          callback(std::move(manifest),
+                   resources_bindings_.AddBinding(std::move(impl)), nullptr);
+        } else {
+          callback(std::move(manifest), nullptr, nullptr);
         }
-
-        if (manifest && manifest->resources && component_resources) {
-          new ComponentResourcesImpl(
-              std::move(component_resources),
-              manifest->resources->resource_urls.Clone());
-        }
-
-        callback(std::move(manifest), nullptr);
-      }));
+      });
 }
 
 void ComponentIndexImpl::FindComponentManifests(
@@ -364,9 +304,10 @@ void ComponentIndexImpl::FindComponentManifests(
       });
 
   for (const std::string& uri : local_index_) {
-    GetComponent(fidl::String(uri), nullptr /* component_resources */,
+    GetComponent(fidl::String(uri),
                  [results, barrier, filter](
                      ComponentManifestPtr manifest,
+                     fidl::InterfaceHandle<ComponentResources> resources_handle,
                      network::NetworkErrorPtr network_error) mutable {
                    // Check if the manifest matches.
                    if (!network_error && ManifestMatches(manifest, *filter)) {
