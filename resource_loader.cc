@@ -79,31 +79,31 @@ void ResourceLoader::LoadResource(const std::string& url,
           // If the network service returned a vmo, pass that off.
           callback(std::move(response->body->get_buffer()), nullptr);
           return;
-        } else {
-          // TODO(ianloic): work out if we can drain a stream into a vmo
-          // directly.
-
-          // If the network service returned a stream, drain it to a string.
-          std::string data;
-          if (!mtl::BlockingCopyToString(
-                  std::move(response->body->get_stream()), &data)) {
-            FTL_LOG(ERROR) << "Failed to read URL response stream.";
-            callback(
-                mx::vmo(),
-                MakeNetworkError(500, "Failed to read URL response stream."));
-            return;
-          }
-          // Copy the string into a VMO.
-          mx::vmo vmo;
-          if (!mtl::VmoFromString(data, &vmo)) {
-            FTL_LOG(ERROR) << "Failed to get vmo from string";
-            callback(mx::vmo(),
-                     MakeNetworkError(500, "Failed to make vmo from string"));
-            return;
-          }
-
-          callback(std::move(vmo), nullptr);
         }
+
+        // TODO(ianloic): work out if we can drain a stream into a vmo
+        // directly.
+
+        // If the network service returned a stream, drain it to a string.
+        std::string data;
+        if (!mtl::BlockingCopyToString(std::move(response->body->get_stream()),
+                                       &data)) {
+          FTL_LOG(ERROR) << "Failed to read URL response stream.";
+          callback(mx::vmo(), MakeNetworkError(
+                                  500, "Failed to read URL response stream."));
+          return;
+        }
+
+        // Copy the string into a VMO.
+        mx::vmo vmo;
+        if (!mtl::VmoFromString(data, &vmo)) {
+          FTL_LOG(ERROR) << "Failed to get vmo from string";
+          callback(mx::vmo(),
+                   MakeNetworkError(500, "Failed to make vmo from string"));
+          return;
+        }
+
+        callback(std::move(vmo), nullptr);
       }));
 }
 

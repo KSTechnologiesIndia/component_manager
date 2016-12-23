@@ -14,7 +14,7 @@
 
 namespace component {
 
-class ComponentIndexImpl : public component::ComponentIndex {
+class ComponentIndexImpl : public ComponentIndex {
  public:
   ComponentIndexImpl(network::NetworkServicePtr network_service);
 
