@@ -52,8 +52,11 @@ class RunComponentApp : public modular::ApplicationEnvironmentHost {
 
     FTL_LOG(INFO) << "Running component " << component_id;
 
+    modular::ServiceProviderPtr app_services;
+
     auto launch_info = modular::ApplicationLaunchInfo::New();
     launch_info->url = component_id;
+    launch_info->services = app_services.NewRequest();
     // TODO(ianloic): support passing arguments to component apps?
 
     modular::ApplicationControllerPtr controller;
@@ -63,6 +66,8 @@ class RunComponentApp : public modular::ApplicationEnvironmentHost {
       FTL_LOG(INFO) << "Component terminated.";
       exit(0);
     });
+
+    context_->outgoing_services()->SetDefaultServiceProvider(std::move(app_services));
   }
 
   void GetApplicationEnvironmentServices(
